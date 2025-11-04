@@ -664,8 +664,11 @@ def voice_listener_loop():
             time.sleep(1)
 
 # ------------- Start-up -------------
-from flask_socketio import SocketIO
 import os
+from flask_socketio import SocketIO
+
+# Force Flask-SocketIO to use threading instead of eventlet or gevent
+os.environ["FLASK_SOCKETIO_ASYNC_MODE"] = "threading"
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
