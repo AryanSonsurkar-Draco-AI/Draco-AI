@@ -52,6 +52,8 @@ try:
 except Exception:
     musicLibrary = None
 
+ON_RENDER = os.environ.get("RENDER") is not None
+
 # ------------- Flask / SocketIO -------------
 app = Flask(__name__, static_folder=".", template_folder=".")
 socketio = SocketIO(app, cors_allowed_origins="*")
@@ -142,17 +144,21 @@ def emit_to_ui(key: str, payload: dict):
     except Exception as e:
         print("Emit error:", e)
 
-def speak(text: str, announce_to_ui: bool = True):
-    """Use local TTS (pyttsx3) and send message to UI. Single source of speak()."""
-    print("[Draco-SPEAK]", text)
-    if announce_to_ui:
-        emit_to_ui("draco_response", {"text": text})
-    try:
-        if engine:
+try:
+    import pyttsx3
+    engine = pyttsx3.init()
+except Exception as e:
+    engine = None
+    print("TTS disabled:", e)
+
+def speak(text):
+    print("Draco says:", text)
+    if engine:
+        try:
             engine.say(text)
             engine.runAndWait()
-    except Exception as e:
-        print("TTS error:", e)
+        except Exception as e:
+            print("TTS error:", e)
 
 # ------------- Notes / Reminders -------------
 class NotesManager:
@@ -622,19 +628,7 @@ def ws_user_command(payload):
         emit("draco_response", {"text": "Error processing command."})
 
 # ------------- Background: optional voice listener thread -------------
-def voice_listener_loop():
-    if sr is None:
-        print("SpeechRecognition not installed; voice listener disabled.")
-        return
-    r = sr.Recognizer()
-    mic = None
-    try:
-        with sr.Microphone() as source:
-            mic = source
-    except Exception as e:
-        print("Microphone init failed:", e)
-        return
-
+if not ON_RENDER:
     # simple wake-word loop (optional)
     speak("Voice listener active.")
     while True:
@@ -650,19 +644,19 @@ def voice_listener_loop():
                     continue
                 if "draco" in text:
                     speak("Yes? Say your command.")
-                    # listen for the command
                     audio2 = r.listen(source, timeout=6, phrase_time_limit=8)
                     try:
                         cmd = r.recognize_google(audio2, language="en-IN")
                         print("Heard command:", cmd)
                         res = process_command(cmd)
                         speak(res)
-                    except Exception as e:
+                    except Exception:
                         speak("I couldn't understand. Try again.")
         except Exception as e:
             print("Voice loop error:", e)
             time.sleep(1)
-
+else:
+    print("Voice listener disabled on Render (no audio hardware).")
 # ------------- Start-up -------------
 import os
 from flask_socketio import SocketIO
