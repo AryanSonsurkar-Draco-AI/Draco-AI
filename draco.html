@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Draco AI — Dashboard</title>
+  <link rel="icon" href="data:,">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;500;700&display=swap');
+
+    :root {
+      --bg-1: #020214;
+      --bg-2: #0a0a12;
+      --neon: #00f0ff;
+      --accent: #7cffc7;
+      --muted: #9aa7b2;
+      --glass: rgba(255, 255, 255, 0.03);
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, "Helvetica Neue", Arial;
+      color: #e6fbff;
+      background: linear-gradient(180deg, var(--bg-1), var(--bg-2));
+    }
+
+    .app {
+      display: flex;
+      gap: 22px;
+      height: 100vh;
+      padding: 28px;
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      width: 300px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(0, 0, 0, 0.06));
+      border: 1px solid rgba(0, 255, 255, 0.06);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6), 0 0 30px rgba(0, 255, 255, 0.03) inset;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* brand */
+    .brand {
+      font-weight: 700;
+      color: var(--neon);
+      font-size: 1.2rem;
+      text-shadow: 0 0 14px rgba(0, 255, 255, 0.12);
+    }
+
+    /* memory */
+    .memory h3 {
+      margin: 0 0 8px 0;
+      color: var(--muted);
+      font-size: .9rem
+    }
+
+    #memoryList {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      max-height: 240px;
+      overflow: auto;
+      border-radius: 10px;
+      background: var(--glass);
+      padding: 8px;
+    }
+
+    #memoryList li {
+      padding: 8px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      background: linear-gradient(90deg, rgba(0, 255, 255, 0.02), rgba(255, 255, 255, 0.01));
+      font-size: .9rem;
+      color: #bff9ff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6) inset;
+    }
+
+    /* status */
+    .status-panel h3 {
+      margin: 0;
+      color: var(--muted);
+      font-size: .9rem
+    }
+
+    .mode {
+      margin-top: 8px;
+      padding: 10px;
+      border-radius: 10px;
+      font-weight: 600;
+      text-align: center;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.6);
+    }
+
+    .mode.idle {
+      background: rgba(255, 255, 255, 0.02);
+      color: #9fe2e2;
+      border: 1px solid rgba(0, 255, 255, 0.04)
+    }
+
+    .mode.listening {
+      background: linear-gradient(90deg, #003b41, #00585f);
+      color: #cff8ff;
+      border: 1px solid rgba(0, 255, 255, 0.12);
+      box-shadow: 0 0 18px rgba(0, 255, 255, 0.14)
+    }
+
+    .mode.speaking {
+      background: linear-gradient(90deg, #2e004b, #7b00ff);
+      color: #ffdfff;
+      border: 1px solid rgba(124, 0, 255, 0.12);
+      box-shadow: 0 0 22px rgba(124, 0, 255, 0.14)
+    }
+
+    .info {
+      font-size: .85rem;
+      color: var(--muted);
+      margin-top: 10px
+    }
+
+    /* MAIN */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px
+    }
+
+    .console {
+      flex: 1;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.01), rgba(0, 0, 0, 0.04));
+      border-radius: 14px;
+      padding: 18px;
+      border: 1px solid rgba(0, 255, 255, 0.04);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+    }
+
+    /* chat window */
+    .chat {
+      flex: 1;
+      overflow: auto;
+      border-radius: 10px;
+      padding: 14px;
+      background: linear-gradient(180deg, rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.05));
+      border: 1px solid rgba(0, 255, 255, 0.03);
+    }
+
+    .msg {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+      align-items: flex-end
+    }
+
+    .msg.user {
+      justify-content: flex-end
+    }
+
+    .msg .bubble {
+      max-width: 70%;
+      padding: 10px 14px;
+      border-radius: 14px;
+      color: #001;
+      font-weight: 600;
+      font-size: 0.95rem;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+    }
+
+    .msg.user .bubble {
+      background: linear-gradient(90deg, #00eaff, #7cffc7)
+    }
+
+    .msg.draco .bubble {
+      background: linear-gradient(90deg, #0b1220, #072033);
+      color: #dff7ff;
+      border: 1px solid rgba(0, 255, 255, 0.06)
+    }
+
+    .msg .meta {
+      font-size: .75rem;
+      color: var(--muted);
+      margin-top: 6px
+    }
+
+    /* controls */
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin-top: 12px
+    }
+
+    #cmdInput {
+      flex: 1;
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(0, 255, 255, 0.04);
+      background: #03050a;
+      color: #bff;
+      outline: none;
+      font-size: 1rem
+    }
+
+    #sendBtn,
+    #micBtn {
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: none;
+      background: var(--neon);
+      color: #001;
+      font-weight: 700;
+      cursor: pointer;
+      box-shadow: 0 8px 30px rgba(0, 255, 255, 0.06)
+    }
+
+    #micBtn {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.04)
+    }
+
+    /* footer */
+    .credits {
+      text-align: right;
+      color: var(--muted);
+      font-size: .85rem;
+      margin-top: 4px
+    }
+
+    /* small screens */
+    @media (max-width:900px) {
+      .app {
+        flex-direction: column;
+        padding: 16px
+      }
+
+      .sidebar {
+        width: auto;
+        display: flex;
+        flex-direction: row;
+        gap: 12px;
+        align-items: center;
+        padding: 10px;
+        overflow: auto
+      }
+
+      .memory {
+        display: none
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">⚡ Draco AI</div>
+      <div class="memory">
+        <h3>Memory</h3>
+        <ul id="memoryList"></ul>
+        <button id="clearMemory">Clear</button>
+      </div>
+      <div class="status-panel">
+        <h3>Status</h3>
+        <div id="modeBadge" class="mode idle">Idle</div>
+        <div class="info">
+          <div>Host: <span id="host">ws://localhost:8765</span></div>
+          <div>Client: <span id="clientStatus">Disconnected</span></div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <section class="console">
+        <div id="chatWindow" class="chat">
+          <!-- chat messages appear here -->
+        </div>
+        <div class="controls">
+          <input id="cmdInput" type="text" placeholder="Type a command or press mic to speak..." />
+          <button id="sendBtn">Send</button>
+          <button id="micBtn" title="Start / Stop voice">🎙️</button>
+        </div>
+      </section>
+      <footer class="credits">
+        <div>Built by Aryan — Draco AI</div>
+        <div>More features are coming soon...</div>
+      </footer>
+    </main>
+  </div>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    /* Draco Flask Dashboard — Pure Flask-SocketIO version */
+
+    const socket = io.connect(window.location.origin);
+
+    // UI references
+    const chatWindow = document.getElementById("chatWindow");
+    const cmdInput = document.getElementById("cmdInput");
+    const sendBtn = document.getElementById("sendBtn");
+    const micBtn = document.getElementById("micBtn");
+    const memoryList = document.getElementById("memoryList");
+    const clearMemory = document.getElementById("clearMemory");
+    const modeBadge = document.getElementById("modeBadge");
+
+    const MEMORY_KEY = "draco_memory_v2";
+    const MAX_MEMORY = 40;
+
+    // helper functions
+    function appendMessage(who, text) {
+      const el = document.createElement("div");
+      el.className = `msg ${who}`;
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.innerText = text;
+      el.appendChild(bubble);
+      chatWindow.appendChild(el);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function setMode(mode) {
+      modeBadge.className = "mode " + (mode || "idle");
+      modeBadge.innerText = mode ? mode.charAt(0).toUpperCase() + mode.slice(1) : "Idle";
+    }
+
+    function saveMemory(item) {
+      let mem = JSON.parse(localStorage.getItem(MEMORY_KEY) || "[]");
+      mem.unshift({ time: new Date().toISOString(), text: item });
+      mem = mem.slice(0, MAX_MEMORY);
+      localStorage.setItem(MEMORY_KEY, JSON.stringify(mem));
+      renderMemory();
+    }
+
+    function renderMemory() {
+      const mem = JSON.parse(localStorage.getItem(MEMORY_KEY) || "[]");
+      memoryList.innerHTML = "";
+      mem.forEach(m => {
+        const li = document.createElement("li");
+        li.innerText = `${new Date(m.time).toLocaleString()} — ${m.text}`;
+        memoryList.appendChild(li);
+      });
+    }
+
+    // send text to Flask
+    function sendCommand(text) {
+      if (!text) return;
+      appendMessage("user", text);
+      saveMemory("You: " + text);
+      socket.emit("user_command", { text });
+      setMode("listening");
+      setTimeout(() => setMode("idle"), 500);
+      cmdInput.value = "";
+    }
+
+    // SocketIO listeners
+    socket.on("connect", () => {
+      appendMessage("draco", "Connected to Draco Flask server ✅");
+    });
+
+    socket.on("draco_response", (data) => {
+  appendMessage("draco", data.text);
+  saveMemory("Draco: " + data.text);
+  setMode("speaking");
+
+  // Speak aloud
+  if ('speechSynthesis' in window) {
+    // const utterance = new SpeechSynthesisUtterance(data.text);
+// speechSynthesis.speak(utterance);
+  }
+
+  setTimeout(() => setMode("idle"), 700);
+});
+
+    socket.on("disconnect", () => {
+      appendMessage("draco", "Disconnected from Flask server ❌");
+    });
+
+    // button + Enter
+    sendBtn.addEventListener("click", () => {
+      sendCommand(cmdInput.value.trim());
+    });
+    cmdInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") sendCommand(cmdInput.value.trim());
+    });
+
+    // mic (Web Speech API)
+if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const recognition = new SR();
+  recognition.lang = "en-IN";
+  recognition.continuous = false;
+  recognition.interimResults = false;
+
+  let recognizing = false;
+
+  recognition.onstart = () => {
+    recognizing = true;
+    micBtn.innerText = "🎙️ Listening...";
+    setMode("listening");
+  };
+
+  recognition.onend = () => {
+    recognizing = false;
+    micBtn.innerText = "🎙️";
+    setMode("idle");
+  };
+
+  recognition.onerror = (e) => {
+    console.error("Speech error:", e);
+    micBtn.innerText = "🎙️ Error";
+    setTimeout(() => micBtn.innerText = "🎙️", 1500);
+  };
+
+  recognition.onresult = (evt) => {
+    const text = evt.results[0][0].transcript.trim();
+    sendCommand(text);
+  };
+
+  micBtn.addEventListener("click", () => {
+    if (recognizing) {
+      recognition.stop();
+      return;
+    }
+    try {
+      recognition.start();
+    } catch (err) {
+      console.warn("Recognition already active:", err);
+    }
+  });
+} else {
+  micBtn.style.display = "none";
+  appendMessage("draco", "🎤 Voice recognition not supported on this browser.");
+}
+
+    // memory clear
+    clearMemory.addEventListener("click", () => {
+      localStorage.removeItem(MEMORY_KEY);
+      renderMemory();
+    });
+
+    // init
+    renderMemory();
+    appendMessage("draco", "Draco Dashboard ready. Type or speak to start.");
+
+  </script>
+</body>
+
+</html>
