@@ -664,12 +664,11 @@ def voice_listener_loop():
             time.sleep(1)
 
 # ------------- Start-up -------------
-if __name__ == "__main__":
-    # spawn voice listener thread (optional)
-    t = threading.Thread(target=voice_listener_loop, daemon=True)
-    t.start()
+import os
+from flask_socketio import SocketIO
 
-    # start Flask SocketIO server
-    print("Starting Draco server on http://127.0.0.1:5000")
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    socketio.run(app, host="0.0.0.0", port=port)
+    socketio.run(app, host="0.0.0.0", port=port, debug=False)
