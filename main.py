@@ -664,11 +664,11 @@ def voice_listener_loop():
             time.sleep(1)
 
 # ------------- Start-up -------------
-import os
 from flask_socketio import SocketIO
+import os
 
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    socketio.run(app, host="0.0.0.0", port=port, debug=False)
+    socketio.run(app, host="0.0.0.0", port=port)
