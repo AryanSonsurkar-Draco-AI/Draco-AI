@@ -14,6 +14,7 @@ import threading
 import subprocess
 import platform
 import webbrowser
+from urllib.parse import quote as url_quote
 from collections import deque
 from typing import Optional
 
@@ -347,8 +348,10 @@ def open_whatsapp_web():
 def send_whatsapp_message(phone: str, message: str):
     """Open WhatsApp web chat to phone with message (uses wa.me). Works if user is logged-in."""
     # phone should be in international format without +, e.g., 919xxxxxxxxx
-    msg = webbrowser.quote(message)
+    msg = url_quote(message)
     url = f"https://wa.me/{phone}?text={msg}"
+    if ON_SERVER:
+        return {"text": f"Opening WhatsApp chat for {phone}…", "action": "open_url", "url": url}
     webbrowser.open(url)
     return f"Opening WhatsApp chat for {phone}. Please confirm send in browser."
 
@@ -473,26 +476,38 @@ def process_command(raw_cmd: str) -> str:
 
     # open websites
     if "open youtube" in cmd:
+        if ON_SERVER:
+            return {"text": "Opening YouTube…", "action": "open_url", "url": "https://youtube.com"}
         r = open_youtube()
         speak(personality.respond(r))
         return r
     if "open instagram" in cmd:
+        if ON_SERVER:
+            return {"text": "Opening Instagram…", "action": "open_url", "url": "https://instagram.com"}
         r = open_instagram()
         speak(personality.respond(r))
         return r
     if "open linkedin" in cmd:
+        if ON_SERVER:
+            return {"text": "Opening LinkedIn…", "action": "open_url", "url": "https://linkedin.com"}
         r = open_linkedin()
         speak(personality.respond(r))
         return r
     if "open github" in cmd:
+        if ON_SERVER:
+            return {"text": "Opening GitHub…", "action": "open_url", "url": "https://github.com"}
         r = open_github()
         speak(personality.respond(r))
         return r
     if "open render" in cmd:
+        if ON_SERVER:
+            return {"text": "Opening Render…", "action": "open_url", "url": "https://render.com"}
         r = open_render()
         speak(personality.respond(r))
         return r
     if "open whatsapp" in cmd or "open whatsapp web" in cmd:
+        if ON_SERVER:
+            return {"text": "Opening WhatsApp Web…", "action": "open_url", "url": "https://web.whatsapp.com"}
         r = open_whatsapp_web()
         speak(personality.respond(r))
         return r
@@ -764,6 +779,10 @@ def api_command():
     text = str(data.get("text", ""))
     try:
         resp = process_command(text)
+        if isinstance(resp, dict):
+            out = {"ok": True}
+            out.update(resp)
+            return out
         return {"ok": True, "text": resp}
     except Exception as e:
         return {"ok": False, "error": str(e)}, 500
@@ -783,8 +802,11 @@ def ws_user_command(payload):
         text = payload.get("text", "")
         print("Received command from web:", text)
         response = process_command(text)
-        # send a structured response
-        emit("draco_response", {"text": response})
+        # send a structured response (allow dict for web actions)
+        if isinstance(response, dict):
+            emit("draco_response", response)
+        else:
+            emit("draco_response", {"text": response})
     except Exception as e:
         print("Error handling user_command:", e)
         emit("draco_response", {"text": "Error processing command."})
