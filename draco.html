@@ -5,32 +5,66 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Draco Assistant</title>
   <style>
-    body { font-family: system-ui, Arial, sans-serif; margin: 0; background: #0b1020; color: #e6e8ef; }
-    .wrap { max-width: 780px; margin: 40px auto; padding: 0 16px; }
-    h1 { font-size: 28px; margin: 0 0 12px; }
-    .card { background: #131935; border: 1px solid #232a4d; border-radius: 12px; padding: 16px; }
-    .row { display: flex; gap: 8px; }
-    input[type=text] { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #2b335d; background:#0f1530; color:#e6e8ef; }
-    button { padding: 12px 14px; border-radius: 8px; border: 1px solid #445; background: #2a3367; color: #e6e8ef; cursor: pointer; }
-    button:hover { background: #313b7a; }
-    .log { margin-top: 14px; max-height: 360px; overflow: auto; padding-right: 4px; }
-    .item { background:#0f1530; border:1px solid #222a50; border-radius: 8px; padding:10px; margin:8px 0; }
-    .user { color:#aad; }
-    .bot { color:#9fd; }
-    small { color:#9aa3c1; }
+    :root {
+      --bg-start: #060812;
+      --bg-end: #0b1020;
+      --card: #0f1230;
+      --accent: #6f8dff;
+      --accent-2: #12ffe6;
+      --text: #eaf1ff;
+      --muted: #9aa3c1;
+      --glow: 0 0 12px rgba(111,141,255,.7), 0 0 28px rgba(18,255,230,.35);
+      --glow-strong: 0 0 18px rgba(111,141,255,.85), 0 0 42px rgba(18,255,230,.6);
+    }
+    * { box-sizing: border-box; }
+    body { font-family: ui-sans-serif, system-ui, Arial, sans-serif; margin: 0; color: var(--text);
+      background: radial-gradient(1200px 600px at 20% 0%, rgba(44,56,168,.25), transparent 60%),
+                  radial-gradient(1000px 800px at 90% 10%, rgba(18,255,230,.09), transparent 55%),
+                  linear-gradient(180deg, var(--bg-start), var(--bg-end));
+      min-height: 100dvh;
+    }
+    .wrap { max-width: 880px; margin: 48px auto; padding: 0 18px; }
+    h1 { font-size: 30px; margin: 0 0 10px; letter-spacing: 0.4px; }
+    .status { display:flex; align-items:center; gap:8px; color: var(--muted); font-size: 14px; margin-bottom: 14px; }
+    .dot { width:10px; height:10px; border-radius:50%; background:#ff5c5c; box-shadow: 0 0 8px rgba(255,92,92,.6); }
+    .dot.on { background:#25ff9b; box-shadow: 0 0 10px rgba(37,255,155,.8); }
+    .card { position:relative; background: linear-gradient(180deg, #0e1232, #0b0f29); border: 1px solid rgba(111,141,255,.22); border-radius: 14px; padding: 16px; box-shadow: var(--glow); }
+    .row { display: flex; gap: 10px; }
+    .input { display:flex; gap:10px; align-items:center; padding:10px; border-radius: 12px; border:1px solid rgba(111,141,255,.18); background:#0a0e26; box-shadow: inset 0 0 0 1px rgba(18,255,230,.08); }
+    input[type=text] { flex: 1; padding: 12px; border-radius: 10px; border: none; outline: none; background: transparent; color: var(--text); font-size: 15px; }
+    .btn { padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(111,141,255,.35); background: linear-gradient(180deg, #1b2370, #16205a); color: var(--text); cursor: pointer; box-shadow: var(--glow); transition: transform .08s ease, box-shadow .15s ease, border-color .15s ease; }
+    .btn:hover { box-shadow: var(--glow-strong); border-color: rgba(18,255,230,.65); transform: translateY(-1px); }
+    .btn:disabled { opacity:.55; cursor:not-allowed; filter: grayscale(.3); }
+    .chipbar { display:flex; flex-wrap: wrap; gap:8px; margin-top:10px; }
+    .chip { padding:8px 12px; border-radius: 999px; border:1px solid rgba(111,141,255,.28); color:#cfe3ff; background: linear-gradient(180deg, #10173d, #0c1434); cursor:pointer; box-shadow: 0 0 0 1px rgba(18,255,230,.05) inset; }
+    .chip:hover { box-shadow: var(--glow); }
+    .log { margin-top: 16px; max-height: 440px; overflow: auto; padding-right: 4px; }
+    .item { background:#0a0f2a; border:1px solid rgba(111,141,255,.18); border-radius: 12px; padding:12px; margin:10px 0; box-shadow: 0 0 0 1px rgba(18,255,230,.05) inset; }
+    .user { color:#9ec0ff; text-shadow: 0 0 8px rgba(111,141,255,.4); }
+    .bot { color:#8bffe7; text-shadow: 0 0 10px rgba(18,255,230,.5); }
+    small { color:var(--muted); }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Draco Assistant</h1>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
     <div class="card">
-      <div class="row" style="margin-bottom:8px;">
+      <div class="input" style="margin-bottom:10px;">
         <input id="input" type="text" placeholder="Type a command (e.g., open youtube, play music, take note ...)" />
-        <button id="sendBtn">Send</button>
+        <button class="btn" id="sendBtn">Send</button>
       </div>
-      <div class="row" style="margin-bottom:8px;">
-        <button id="micBtn">🎤 Speak</button>
-        <button id="stopSpeakBtn">🛑 Stop Voice</button>
+      <div class="row" style="margin-bottom:10px;">
+        <button class="btn" id="micBtn">🎤 Speak</button>
+        <button class="btn" id="stopSpeakBtn">🛑 Stop Voice</button>
+      </div>
+      <div class="chipbar" id="chips">
+        <div class="chip" data-cmd="open youtube">Open YouTube</div>
+        <div class="chip" data-cmd="play music">Play Music</div>
+        <div class="chip" data-cmd="take note buy milk">Take Note</div>
+        <div class="chip" data-cmd="list notes">List Notes</div>
+        <div class="chip" data-cmd="system status">System Status</div>
+        <div class="chip" data-cmd="search for render deployment guide">Search Web</div>
       </div>
       <div class="log" id="log"></div>
       <small>Tip: Try "open youtube", "play music", "list notes", "remind me to drink water at 19:30"</small>
@@ -44,8 +78,10 @@
     const sendBtn = document.getElementById('sendBtn');
     const micBtn = document.getElementById('micBtn');
     const stopSpeakBtn = document.getElementById('stopSpeakBtn');
+    const dot = document.getElementById('dot');
+    const statusText = document.getElementById('statusText');
 
-    const socket = io();
+    const socket = io({ transports: ['websocket', 'polling'] });
 
     function appendItem(text, who='bot') {
       const el = document.createElement('div');
@@ -68,11 +104,20 @@
 
     stopSpeakBtn.onclick = () => window.speechSynthesis.cancel();
 
+    function sendCommand(text) {
+      if (!text) return;
+      appendItem(text, 'user');
+      try {
+        socket.emit('user_command', { text });
+      } catch (e) {
+        appendItem('Failed to send command.', 'bot');
+      }
+    }
+
     sendBtn.onclick = () => {
       const val = (input.value || '').trim();
       if (!val) return;
-      appendItem(val, 'user');
-      socket.emit('user_command', { text: val });
+      sendCommand(val);
       input.value = '';
       input.focus();
     };
@@ -83,6 +128,17 @@
 
     socket.on('connect', () => {
       appendItem('Connected to Draco!', 'bot');
+      dot.classList.add('on');
+      statusText.textContent = 'Online';
+      sendBtn.disabled = false;
+      micBtn.disabled = false;
+    });
+    socket.on('disconnect', () => {
+      appendItem('Disconnected. Trying to reconnect…', 'bot');
+      dot.classList.remove('on');
+      statusText.textContent = 'Reconnecting…';
+      sendBtn.disabled = true;
+      micBtn.disabled = true;
     });
 
     socket.on('draco_response', (data) => {
@@ -121,6 +177,15 @@
         micBtn.disabled = false;
       }
     };
+
+    // Quick chips
+    document.getElementById('chips').addEventListener('click', (e) => {
+      const t = e.target.closest('.chip');
+      if (!t) return;
+      const cmd = t.getAttribute('data-cmd');
+      input.value = cmd;
+      sendBtn.click();
+    });
   </script>
 </body>
 </html>
