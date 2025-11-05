@@ -618,6 +618,16 @@ def api_echo():
     data = request.json or {}
     return {"ok": True, "echo": data}
 
+@app.route("/api/command", methods=["POST"])
+def api_command():
+    data = request.json or {}
+    text = str(data.get("text", ""))
+    try:
+        resp = process_command(text)
+        return {"ok": True, "text": resp}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}, 500
+
 @socketio.on("connect")
 def ws_connect():
     print("Client connected")
