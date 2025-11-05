@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: draco-ai
+    env: python
+    plan: free
+    buildCommand: |
+      apt-get update && apt-get install -y espeak ffmpeg
+      pip install -r requirements.txt
+    startCommand: gunicorn main:app
