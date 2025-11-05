@@ -46,6 +46,10 @@ try:
     import pyautogui
 except Exception:
     pyautogui = None
+try:
+    import pywhatkit
+except Exception:
+    pywhatkit = None
 # DuckDuckGo scraping wrapper
 try:
     from ddgs import DDGS
@@ -328,6 +332,18 @@ def open_instagram():
     webbrowser.open("https://instagram.com")
     return "Opened Instagram."
 
+def open_github():
+    webbrowser.open("https://github.com")
+    return "Opened GitHub."
+
+def open_render():
+    webbrowser.open("https://render.com")
+    return "Opened Render."
+
+def open_whatsapp_web():
+    webbrowser.open("https://web.whatsapp.com")
+    return "Opened WhatsApp Web."
+
 def send_whatsapp_message(phone: str, message: str):
     """Open WhatsApp web chat to phone with message (uses wa.me). Works if user is logged-in."""
     # phone should be in international format without +, e.g., 919xxxxxxxxx
@@ -352,6 +368,56 @@ def play_music_from_library(song_name: Optional[str] = None):
             return f"musicLibrary error: {e}"
     else:
         return "musicLibrary not found. Add musicLibrary.py with play/pause/stop functions."
+
+# ------------- Local system actions (best-effort) -------------
+def sleep_pc():
+    if platform.system() == "Windows":
+        try:
+            subprocess.run(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"], check=False)
+            return True, "Sleeping now."
+        except Exception as e:
+            return False, f"Sleep failed: {e}"
+    return False, "Sleep not supported on this OS."
+
+def type_text(text: str):
+    if not pyautogui:
+        return False, "Typing requires pyautogui installed locally."
+    try:
+        pyautogui.typewrite(text, interval=0.02)
+        return True, "Typed your text."
+    except Exception as e:
+        return False, f"Typing failed: {e}"
+
+def set_brightness(percent: int):
+    if platform.system() == "Windows":
+        ok = set_brightness_win(percent)
+        return ok, ("Brightness updated." if ok else "Couldn't change brightness.")
+    return False, "Brightness control not supported on this OS."
+
+def toggle_wifi(enable: bool):
+    if platform.system() == "Windows":
+        ok = toggle_wifi_win(enable)
+        return ok, ("Wi-Fi enabled." if (ok and enable) else ("Wi-Fi disabled." if ok else "Couldn't toggle Wi-Fi."))
+    return False, "Wi-Fi control not supported on this OS."
+
+def set_volume(percent: int):
+    return False, "Volume control not implemented on this system."
+
+def toggle_bluetooth(enable: bool):
+    return False, "Bluetooth control not implemented."
+
+def whatsapp_send_direct(phone: str, message: str):
+    if ON_SERVER:
+        return False, "Direct WhatsApp send only works on your local machine."
+    if not pywhatkit:
+        return False, "Install pywhatkit locally to send WhatsApp instantly."
+    try:
+        if not phone.startswith("+") and len(phone) >= 10:
+            phone = "+" + phone
+        pywhatkit.sendwhatmsg_instantly(phone_no=phone, message=message, wait_time=8, tab_close=True)
+        return True, "WhatsApp message sent."
+    except Exception as e:
+        return False, f"WhatsApp send failed: {e}"
 
 # ------------- Search & utilities -------------
 def web_search_duckduckgo(query: str, limit: int = 3):
@@ -418,6 +484,18 @@ def process_command(raw_cmd: str) -> str:
         r = open_linkedin()
         speak(personality.respond(r))
         return r
+    if "open github" in cmd:
+        r = open_github()
+        speak(personality.respond(r))
+        return r
+    if "open render" in cmd:
+        r = open_render()
+        speak(personality.respond(r))
+        return r
+    if "open whatsapp" in cmd or "open whatsapp web" in cmd:
+        r = open_whatsapp_web()
+        speak(personality.respond(r))
+        return r
 
     # whatsapp send (phrase: send whatsapp to 919xxxxxxxxx message hi)
     if "whatsapp" in cmd and "send" in cmd:
@@ -440,6 +518,10 @@ def process_command(raw_cmd: str) -> str:
                     message = " ".join(parts[idx:])
                 break
         if phone and message:
+            sent, out = whatsapp_send_direct(phone, message)
+            if sent:
+                speak(out)
+                return out
             r = send_whatsapp_message(phone, message)
             speak(r)
             return r
@@ -469,6 +551,10 @@ def process_command(raw_cmd: str) -> str:
         s = system_status_summary()
         speak(s)
         return s
+    if "sleep" in cmd or "sleep pc" in cmd or "put pc in sleep" in cmd:
+        ok, msg = sleep_pc()
+        speak(msg)
+        return msg
     if "screenshot" in cmd:
         try:
             path = take_screenshot()
@@ -498,6 +584,49 @@ def process_command(raw_cmd: str) -> str:
             subprocess.run(["rundll32.exe", "user32.dll,LockWorkStation"])
             return "Locked PC."
         return "Lock not available on this OS."
+
+    # settings controls
+    if cmd.startswith("set brightness "):
+        try:
+            val = int(cmd.rsplit("set brightness ", 1)[1].strip().rstrip("%"))
+            val = max(0, min(100, val))
+            ok, msg = set_brightness(val)
+            speak(msg)
+            return msg
+        except Exception:
+            return "Please specify brightness as a number 0-100."
+    if "turn wifi on" in cmd or "wifi on" in cmd:
+        ok, msg = toggle_wifi(True)
+        speak(msg)
+        return msg
+    if "turn wifi off" in cmd or "wifi off" in cmd:
+        ok, msg = toggle_wifi(False)
+        speak(msg)
+        return msg
+    if cmd.startswith("set volume "):
+        try:
+            val = int(cmd.rsplit("set volume ", 1)[1].strip().rstrip("%"))
+            val = max(0, min(100, val))
+            ok, msg = set_volume(val)
+            speak(msg)
+            return msg
+        except Exception:
+            return "Please specify volume as a number 0-100."
+    if "bluetooth on" in cmd or "turn bluetooth on" in cmd:
+        ok, msg = toggle_bluetooth(True)
+        speak(msg)
+        return msg
+    if "bluetooth off" in cmd or "turn bluetooth off" in cmd:
+        ok, msg = toggle_bluetooth(False)
+        speak(msg)
+        return msg
+
+    # type text into active window
+    if cmd.startswith("type "):
+        text_to_type = raw_cmd.strip()[5:]
+        ok, msg = type_text(text_to_type)
+        speak(msg)
+        return msg
 
     # open desktop apps
     if cmd.startswith("open app ") or cmd.startswith("open "):
@@ -577,6 +706,17 @@ def process_command(raw_cmd: str) -> str:
         res = web_search_duckduckgo(q)
         speak("Here's what I found.")
         return res
+
+    # jokes
+    if "joke" in cmd or "tell me a joke" in cmd:
+        jokes = [
+            "Why do programmers prefer dark mode? Because light attracts bugs!",
+            "I told my computer I needed a break, and it said 'No problem — I'll go to sleep.'",
+            "There are only 10 kinds of people in the world: those who understand binary and those who don't.",
+        ]
+        reply = random.choice(jokes)
+        speak(reply)
+        return reply
 
     # weather placeholder
     if "weather" in cmd:
