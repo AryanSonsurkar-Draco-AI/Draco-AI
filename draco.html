@@ -81,7 +81,12 @@
     const dot = document.getElementById('dot');
     const statusText = document.getElementById('statusText');
 
-    const socket = io({ transports: ['websocket', 'polling'] });
+    let socket = null;
+    try {
+      socket = io({ transports: ['websocket', 'polling'], withCredentials: false });
+    } catch (e) {
+      socket = null;
+    }
 
     function appendItem(text, who='bot') {
       const el = document.createElement('div');
@@ -91,8 +96,10 @@
       log.scrollTop = log.scrollHeight;
     }
 
+    let voiceEnabled = false;
     function speakText(text) {
       try {
+        if (!voiceEnabled) return; // gated by user gesture
         window.speechSynthesis.cancel();
         const utter = new SpeechSynthesisUtterance(text);
         utter.rate = 1.0;
@@ -104,13 +111,25 @@
 
     stopSpeakBtn.onclick = () => window.speechSynthesis.cancel();
 
-    function sendCommand(text) {
+    async function sendCommand(text) {
       if (!text) return;
       appendItem(text, 'user');
+      // Prefer socket if connected
+      if (socket && socket.connected) {
+        try { socket.emit('user_command', { text }); return; } catch (e) {}
+      }
+      // Fallback to HTTP
       try {
-        socket.emit('user_command', { text });
+        const r = await fetch('/api/command', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        const data = await r.json();
+        const t = (data && data.text) ? String(data.text) : (data && data.error) ? String(data.error) : 'No response';
+        appendItem(t, 'bot');
+        speakText(t);
       } catch (e) {
-        appendItem('Failed to send command.', 'bot');
+        appendItem('Request failed. Please retry.', 'bot');
       }
     }
 
@@ -126,27 +145,36 @@
       if (e.key === 'Enter') sendBtn.click();
     });
 
-    socket.on('connect', () => {
-      appendItem('Connected to Draco!', 'bot');
-      dot.classList.add('on');
-      statusText.textContent = 'Online';
-      sendBtn.disabled = false;
-      micBtn.disabled = false;
-    });
-    socket.on('disconnect', () => {
-      appendItem('Disconnected. Trying to reconnect…', 'bot');
-      dot.classList.remove('on');
-      statusText.textContent = 'Reconnecting…';
-      sendBtn.disabled = true;
-      micBtn.disabled = true;
-    });
+    if (socket) {
+      socket.on('connect', () => {
+        appendItem('Connected to Draco!', 'bot');
+        dot.classList.add('on');
+        statusText.textContent = 'Online';
+        sendBtn.disabled = false;
+        micBtn.disabled = false;
+      });
+      socket.on('disconnect', () => {
+        appendItem('Disconnected. Using HTTP fallback…', 'bot');
+        dot.classList.remove('on');
+        statusText.textContent = 'HTTP mode';
+      });
+      socket.on('draco_response', (data) => {
+        const text = (data && data.text) ? String(data.text) : '';
+        if (!text) return;
+        appendItem(text, 'bot');
+        speakText(text);
+      });
+    } else {
+      statusText.textContent = 'HTTP mode';
+    }
 
-    socket.on('draco_response', (data) => {
-      const text = (data && data.text) ? String(data.text) : '';
-      if (!text) return;
-      appendItem(text, 'bot');
-      speakText(text);
-    });
+    // Enable speech on first interaction (autoplay policies)
+    document.addEventListener('click', () => {
+      if (!voiceEnabled) {
+        try { window.speechSynthesis.resume(); } catch (e) {}
+        voiceEnabled = true;
+      }
+    }, { once: true });
 
     // Browser voice input (Web Speech API) – best effort
     let recognition = null;
