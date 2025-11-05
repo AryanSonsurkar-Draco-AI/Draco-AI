@@ -361,16 +361,52 @@ def open_linkedin():
 
 # ------------- Music integration -------------
 def play_music_from_library(song_name: Optional[str] = None):
-    if musicLibrary:
+    if not musicLibrary:
+        return "musicLibrary not found. Add musicLibrary.py with play/pause/stop functions."
+    # On server: return a web action so the browser opens the URL
+    if ON_SERVER:
         try:
-            if song_name:
-                return musicLibrary.play(song_name)
-            else:
-                return musicLibrary.play()
+            url = None
+            song_display_name = song_name or "music"
+            # Use musicLibrary's built-in search function if available
+            if hasattr(musicLibrary, "_find_song_url_by_name") and song_name:
+                url = musicLibrary._find_song_url_by_name(song_name)
+                if url:
+                    return {"text": f"Playing: {song_name}", "action": "open_url", "url": url}
+            # Fallback: search music dict directly
+            if hasattr(musicLibrary, "music") and isinstance(musicLibrary.music, dict):
+                if song_name:
+                    key = song_name.strip().lower()
+                    # Exact match
+                    if key in musicLibrary.music:
+                        url = musicLibrary.music[key]
+                    else:
+                        # Substring/fuzzy match
+                        for k, v in musicLibrary.music.items():
+                            if key in k.lower() or k.lower() in key:
+                                url = v
+                                song_display_name = k
+                                break
+                # If no song specified or not found, use first song
+                if url is None:
+                    try:
+                        url = next(iter(musicLibrary.music.values()))
+                        song_display_name = next(iter(musicLibrary.music.keys()))
+                    except Exception:
+                        url = None
+            if url:
+                return {"text": f"Playing: {song_display_name}", "action": "open_url", "url": url}
+            return "No matching song found. Try: play faded, play lily, play alone"
         except Exception as e:
             return f"musicLibrary error: {e}"
-    else:
-        return "musicLibrary not found. Add musicLibrary.py with play/pause/stop functions."
+    # Local: invoke the library which opens the browser
+    try:
+        if song_name:
+            return musicLibrary.play(song_name)
+        else:
+            return musicLibrary.play()
+    except Exception as e:
+        return f"musicLibrary error: {e}"
 
 # ------------- Local system actions (best-effort) -------------
 def sleep_pc():
@@ -544,14 +580,19 @@ def process_command(raw_cmd: str) -> str:
             return "Please provide phone number and message. Example: send whatsapp to 919123456789 message Hello"
 
     # music
-    if "play music" in cmd or "play song" in cmd:
-        # allow "play music <name>"
+    if cmd.startswith("play "):
+        # allow "play music <name>", "play song <name>", or just "play <name>"
+        rest = cmd[5:].strip()  # after "play "
         name = None
-        if "play music " in cmd:
-            name = cmd.split("play music ", 1)[1].strip()
-        elif "play song " in cmd:
-            name = cmd.split("play song ", 1)[1].strip()
+        if rest.startswith("music "):
+            name = rest[6:].strip()  # after "music "
+        elif rest.startswith("song "):
+            name = rest[5:].strip()  # after "song "
+        elif rest:
+            name = rest  # just "play faded" -> "faded"
         r = play_music_from_library(name)
+        if isinstance(r, dict):
+            return r
         speak(str(r))
         return str(r)
     if "pause music" in cmd or "pause" == cmd:
