@@ -125,9 +125,14 @@
           body: JSON.stringify({ text })
         });
         const data = await r.json();
+        if (data && data.action === 'open_url' && data.url) {
+          try { window.open(data.url, '_blank'); } catch (e) {}
+        }
         const t = (data && data.text) ? String(data.text) : (data && data.error) ? String(data.error) : 'No response';
-        appendItem(t, 'bot');
-        speakText(t);
+        if (t) {
+          appendItem(t, 'bot');
+          speakText(t);
+        }
       } catch (e) {
         appendItem('Request failed. Please retry.', 'bot');
       }
@@ -159,10 +164,15 @@
         statusText.textContent = 'HTTP mode';
       });
       socket.on('draco_response', (data) => {
+        if (!data) return;
+        if (data.action === 'open_url' && data.url) {
+          try { window.open(data.url, '_blank'); } catch (e) {}
+        }
         const text = (data && data.text) ? String(data.text) : '';
-        if (!text) return;
-        appendItem(text, 'bot');
-        speakText(text);
+        if (text) {
+          appendItem(text, 'bot');
+          speakText(text);
+        }
       });
     } else {
       statusText.textContent = 'HTTP mode';
