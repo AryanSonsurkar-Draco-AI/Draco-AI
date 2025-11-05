@@ -1,5 +1,15 @@
 services:
   - type: web
+    name: draco-assistant
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.6
+services:
+  - type: web
     name: draco-ai
     env: python
     plan: free
