@@ -61,8 +61,10 @@ ON_RENDER = os.environ.get("RENDER") is not None
 ON_SERVER = ON_RENDER or (os.environ.get("PORT") is not None) or (os.environ.get("RENDER_EXTERNAL_URL") is not None)
 
 # ------------- Flask / SocketIO -------------
+# Force Flask-SocketIO to use threading instead of eventlet or gevent
+os.environ["FLASK_SOCKETIO_ASYNC_MODE"] = "threading"
 app = Flask(__name__, static_folder=".", template_folder=".")
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 # ------------- Global utilities & config -------------
 MEMORY_FILE = "memory.json"
@@ -668,14 +670,6 @@ if not ON_RENDER:
 else:
     print("Voice listener disabled on Render (no audio hardware).")
 # ------------- Start-up -------------
-import os
-from flask_socketio import SocketIO
-
-# Force Flask-SocketIO to use threading instead of eventlet or gevent
-os.environ["FLASK_SOCKETIO_ASYNC_MODE"] = "threading"
-
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     run_kwargs = {}
