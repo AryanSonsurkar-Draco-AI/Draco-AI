@@ -58,6 +58,7 @@ except Exception:
     musicLibrary = None
 
 ON_RENDER = os.environ.get("RENDER") is not None
+ON_SERVER = ON_RENDER or (os.environ.get("PORT") is not None) or (os.environ.get("RENDER_EXTERNAL_URL") is not None)
 
 # ------------- Flask / SocketIO -------------
 app = Flask(__name__, static_folder=".", template_folder=".")
@@ -138,10 +139,13 @@ memory = MemoryManager()
 personality = Personality()
 
 # ------------- TTS (single speak implementation) -------------
-if pyttsx3:
-    engine = pyttsx3.init()
-else:
-    engine = None
+# On servers (Render/containers), avoid initializing pyttsx3 (needs eSpeak)
+engine = None
+if pyttsx3 and not ON_SERVER:
+    try:
+        engine = pyttsx3.init()
+    except Exception:
+        engine = None
 
 def emit_to_ui(key: str, payload: dict):
     try:
@@ -149,12 +153,13 @@ def emit_to_ui(key: str, payload: dict):
     except Exception as e:
         print("Emit error:", e)
 
-try:
-    import pyttsx3
-    engine = pyttsx3.init()
-except Exception as e:
-    engine = None
-    print("TTS disabled:", e)
+# Reconfirm TTS availability with safe init (local only)
+if pyttsx3 and not ON_SERVER and engine is None:
+    try:
+        engine = pyttsx3.init()
+    except Exception as e:
+        engine = None
+        print("TTS disabled:", e)
 
 def speak(text):
     print("Draco says:", text)
