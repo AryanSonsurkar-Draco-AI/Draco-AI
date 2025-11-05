@@ -33,6 +33,11 @@ try:
     import speech_recognition as sr
 except Exception:
     sr = None
+if sr:
+    try:
+        r = sr.Recognizer()
+    except Exception:
+        r = None
 try:
     import psutil
 except Exception:

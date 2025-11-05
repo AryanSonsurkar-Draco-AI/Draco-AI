@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Draco Assistant</title>
+  <style>
+    body { font-family: system-ui, Arial, sans-serif; margin: 0; background: #0b1020; color: #e6e8ef; }
+    .wrap { max-width: 780px; margin: 40px auto; padding: 0 16px; }
+    h1 { font-size: 28px; margin: 0 0 12px; }
+    .card { background: #131935; border: 1px solid #232a4d; border-radius: 12px; padding: 16px; }
+    .row { display: flex; gap: 8px; }
+    input[type=text] { flex: 1; padding: 12px; border-radius: 8px; border: 1px solid #2b335d; background:#0f1530; color:#e6e8ef; }
+    button { padding: 12px 14px; border-radius: 8px; border: 1px solid #445; background: #2a3367; color: #e6e8ef; cursor: pointer; }
+    button:hover { background: #313b7a; }
+    .log { margin-top: 14px; max-height: 360px; overflow: auto; padding-right: 4px; }
+    .item { background:#0f1530; border:1px solid #222a50; border-radius: 8px; padding:10px; margin:8px 0; }
+    .user { color:#aad; }
+    .bot { color:#9fd; }
+    small { color:#9aa3c1; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Draco Assistant</h1>
+    <div class="card">
+      <div class="row" style="margin-bottom:8px;">
+        <input id="input" type="text" placeholder="Type a command (e.g., open youtube, play music, take note ...)" />
+        <button id="sendBtn">Send</button>
+      </div>
+      <div class="row" style="margin-bottom:8px;">
+        <button id="micBtn">🎤 Speak</button>
+        <button id="stopSpeakBtn">🛑 Stop Voice</button>
+      </div>
+      <div class="log" id="log"></div>
+      <small>Tip: Try "open youtube", "play music", "list notes", "remind me to drink water at 19:30"</small>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const log = document.getElementById('log');
+    const input = document.getElementById('input');
+    const sendBtn = document.getElementById('sendBtn');
+    const micBtn = document.getElementById('micBtn');
+    const stopSpeakBtn = document.getElementById('stopSpeakBtn');
+
+    const socket = io();
+
+    function appendItem(text, who='bot') {
+      const el = document.createElement('div');
+      el.className = 'item';
+      el.innerHTML = `<div class="${who}">${text}</div>`;
+      log.appendChild(el);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function speakText(text) {
+      try {
+        window.speechSynthesis.cancel();
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.rate = 1.0;
+        utter.pitch = 1.0;
+        utter.lang = 'en-US';
+        window.speechSynthesis.speak(utter);
+      } catch (e) { /* no-op */ }
+    }
+
+    stopSpeakBtn.onclick = () => window.speechSynthesis.cancel();
+
+    sendBtn.onclick = () => {
+      const val = (input.value || '').trim();
+      if (!val) return;
+      appendItem(val, 'user');
+      socket.emit('user_command', { text: val });
+      input.value = '';
+      input.focus();
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendBtn.click();
+    });
+
+    socket.on('connect', () => {
+      appendItem('Connected to Draco!', 'bot');
+    });
+
+    socket.on('draco_response', (data) => {
+      const text = (data && data.text) ? String(data.text) : '';
+      if (!text) return;
+      appendItem(text, 'bot');
+      speakText(text);
+    });
+
+    // Browser voice input (Web Speech API) – best effort
+    let recognition = null;
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognition = new SR();
+      recognition.lang = 'en-IN';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        input.value = transcript;
+        sendBtn.click();
+      };
+      recognition.onerror = (e) => appendItem('Mic error: ' + e.error, 'bot');
+      recognition.onend = () => micBtn.disabled = false;
+    }
+
+    micBtn.onclick = () => {
+      if (!recognition) {
+        appendItem('Speech recognition not supported in this browser.', 'bot');
+        return;
+      }
+      try {
+        micBtn.disabled = true;
+        recognition.start();
+      } catch (e) {
+        micBtn.disabled = false;
+      }
+    };
+  </script>
+</body>
+</html>
+
+

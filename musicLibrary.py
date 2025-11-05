@@ -1,9 +1,12 @@
+import webbrowser
+from typing import Optional
+
 music = {
     "stealth": "https://www.youtube.com/watch?v=U47Tr9BB_wE",
     "march": "https://www.youtube.com/watch?v=Xqeq4b5u_Xw",
     "skyfall": "https://www.youtube.com/watch?v=DeumyOzKqgI&pp=ygUHc2t5ZmFsbA%3D%3D",
-    "wolf": "https://www.youtube.com/watch?v=ThCH0U6aJpU&list=PLnrGi_-oOR6wm0Vi-1OsiLiV5ePSPs9oF&index=21"
-    "stressed out"  "https://www.youtube.com/watch?v=pXRviuL6vMY",
+    "wolf": "https://www.youtube.com/watch?v=ThCH0U6aJpU&list=PLnrGi_-oOR6wm0Vi-1OsiLiV5ePSPs9oF&index=21",
+    "stressed out": "https://www.youtube.com/watch?v=pXRviuL6vMY",
     "let me down slowly": "https://www.youtube.com/watch?v=KkGVmN68ByU",
     "it ain't me": "https://www.youtube.com/watch?v=DJyR0kJ0mT0",
     "bad liar": "https://www.youtube.com/watch?v=TvPx0c87PXI",
@@ -51,7 +54,6 @@ music = {
     "animals": "https://www.youtube.com/watch?v=gCYcHz2k5x0",
     "scared to be lonely": "https://www.youtube.com/watch?v=6MX9s9vHSPw",
     "happier": "https://www.youtube.com/watch?v=7qFfFVSerQo",
-    # Added Songs
     "shivers": "https://www.youtube.com/watch?v=pmxjzD8ZpPI",
     "savage love": "https://www.youtube.com/watch?v=gUci-tsiU4I",
     "pepperoni": "https://www.youtube.com/watch?v=Uj1ykZWtPYI",
@@ -69,6 +71,35 @@ music = {
     "midnight city": "https://www.youtube.com/watch?v=dX3k_QDnzHE",
     "sunflower": "https://www.youtube.com/watch?v=ApXoWvfEYVU",
     "levitate": "https://www.youtube.com/watch?v=cQx9DQydEOM",
-    "swami" : "https://www.youtube.com/watch?v=WY7mogD-o3I&list=RDWY7mogD-o3I&start_radio=1&pp=ygUFc3dhbWmgBwE%3D"
-    
+    "swami": "https://www.youtube.com/watch?v=WY7mogD-o3I&list=RDWY7mogD-o3I&start_radio=1&pp=ygUFc3dhbWmgBwE%3D"
 }
+
+def _find_song_url_by_name(name: str) -> Optional[str]:
+    key = name.strip().lower()
+    if key in music:
+        return music[key]
+    # substring fuzzy match
+    for k, url in music.items():
+        if key in k:
+            return url
+    return None
+
+def play(song_name: Optional[str] = None) -> str:
+    if song_name:
+        url = _find_song_url_by_name(song_name)
+        if not url:
+            return f"Song not found: {song_name}"
+        webbrowser.open(url)
+        return f"Playing: {song_name}"
+    # default: open a random/first track
+    first_url = next(iter(music.values()))
+    webbrowser.open(first_url)
+    return "Playing music."
+
+def pause() -> None:
+    # Not controllable from here when opened in a browser
+    pass
+
+def stop() -> None:
+    # Not controllable from here when opened in a browser
+    pass
