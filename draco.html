@@ -82,6 +82,7 @@
     const statusText = document.getElementById('statusText');
 
     let socket = null;
+    let user = { logged_in: false, email: null, profile: {} };
     try {
       socket = io({ transports: ['websocket', 'polling'], withCredentials: false });
     } catch (e) {
@@ -138,6 +139,68 @@
       }
     }
 
+    async function loadMe() {
+      try {
+        const r = await fetch('/me');
+        const d = await r.json();
+        user = d || { logged_in:false };
+        if (!user.logged_in) {
+          // guest mode is allowed when directly opening this page
+          appendItem('Guest mode: your chats won\'t be saved. Sign in to sync.', 'bot');
+          return;
+        }
+        appendItem('Signed in as ' + user.email, 'bot');
+        await loadHistory();
+        await maybeRunOnboarding();
+      } catch (e) { /* ignore */ }
+    }
+
+    async function loadHistory() {
+      try {
+        const r = await fetch('/api/chat_history');
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!d.ok) return;
+        (d.items||[]).slice(-50).forEach(it => {
+          appendItem(it.text, it.who === 'user' ? 'user' : 'bot');
+        });
+      } catch (e) {}
+    }
+
+    async function maybeRunOnboarding() {
+      if (!user.logged_in) return;
+      try {
+        const r = await fetch('/api/profile');
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!d.ok) return;
+        const p = d.profile || {};
+        const needed = [];
+        if (!p.name) needed.push('name');
+        if (!p.language) needed.push('language');
+        if (!p.interests) needed.push('interests');
+        if (needed.length === 0) return;
+        appendItem('Let\'s personalize your experience. I\'ll ask a few quick questions.', 'bot');
+        const updates = {};
+        if (needed.includes('name')) {
+          const v = prompt('What should I call you?');
+          if (v) updates.name = v.trim();
+        }
+        if (needed.includes('language')) {
+          const v = prompt('Preferred language (e.g., English, Hindi)?');
+          if (v) updates.language = v.trim();
+        }
+        if (needed.includes('interests')) {
+          const v = prompt('Your interests (comma-separated)?');
+          if (v) updates.interests = v.trim();
+        }
+        if (Object.keys(updates).length) {
+          await fetch('/api/profile', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(updates) });
+          appendItem('Thanks! I\'ll use that to tailor my replies.', 'bot');
+        }
+      } catch (e) {}
+    }
+
     sendBtn.onclick = () => {
       const val = (input.value || '').trim();
       if (!val) return;
@@ -157,6 +220,8 @@
         statusText.textContent = 'Online';
         sendBtn.disabled = false;
         micBtn.disabled = false;
+        // Load user state/history after connection
+        loadMe();
       });
       socket.on('disconnect', () => {
         appendItem('Disconnected. Using HTTP fallback…', 'bot');

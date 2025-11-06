@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Draco • Sign in</title>
+  <style>
+    :root { --bg:#0b1020; --card:#0f1230; --text:#eaf1ff; --muted:#98a3c4; --accent:#6f8dff; --accent2:#12ffe6; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: ui-sans-serif, system-ui, Arial, sans-serif; color:var(--text);
+      background: radial-gradient(1000px 700px at 20% -10%, rgba(111,141,255,.18), transparent 60%),
+                  radial-gradient(900px 600px at 100% 0%, rgba(18,255,230,.10), transparent 55%),
+                  linear-gradient(180deg, #060812, var(--bg));
+      min-height:100dvh; display:grid; place-items:center; padding:20px;
+    }
+    .card { width:100%; max-width: 520px; background: linear-gradient(180deg, #0e1232, #0b0f29); border:1px solid rgba(111,141,255,.25); border-radius:16px; padding:22px; box-shadow: 0 0 18px rgba(111,141,255,.3), 0 0 36px rgba(18,255,230,.2); }
+    h1 { margin:0 0 8px; font-size:26px; }
+    p { margin:6px 0 16px; color:var(--muted); }
+    .row { display:flex; gap:10px; }
+    .btn { width:100%; padding:12px; border-radius:10px; border:1px solid rgba(111,141,255,.35); background: linear-gradient(180deg, #1b2370, #16205a); color:var(--text); cursor:pointer; }
+    .btn.alt { background: linear-gradient(180deg, #103b37, #0c2f2b); border-color: rgba(18,255,230,.45); }
+    .btn.ghost { background: transparent; border-color: rgba(111,141,255,.25); }
+    .sep { text-align:center; color:var(--muted); margin:12px 0; }
+    .input { background:#0a0e26; border:1px solid rgba(111,141,255,.22); padding:10px 12px; border-radius:10px; color:var(--text); width:100%; }
+    label { font-size:13px; color:var(--muted); display:block; margin:10px 0 6px; }
+    .note { color:var(--muted); font-size:13px; margin-top:10px; }
+    .ok { color:#38f3b8; }
+    .err { color:#ff7b7b; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Welcome to Draco</h1>
+    <p>Sign in to sync your chat history and personalize replies.</p>
+
+    <div class="row" style="margin-bottom:10px;">
+      <button class="btn" id="googleBtn">Continue with Google</button>
+      <button class="btn" id="microsoftBtn">Microsoft</button>
+    </div>
+
+    <div class="sep">or</div>
+
+    <div>
+      <label for="email">Email address</label>
+      <input id="email" class="input" type="email" placeholder="you@example.com" />
+      <button class="btn alt" id="sendCodeBtn" style="margin-top:10px;">Send verification code</button>
+    </div>
+
+    <div id="codeArea" style="display:none;">
+      <label for="code">Enter 6-digit code</label>
+      <input id="code" class="input" type="text" inputmode="numeric" maxlength="6" placeholder="123456" />
+      <button class="btn" id="verifyBtn" style="margin-top:10px;">Verify & Continue</button>
+    </div>
+
+    <div class="sep">or</div>
+    <button class="btn ghost" id="guestBtn">Stay logged out</button>
+
+    <div class="note" id="note"></div>
+  </div>
+
+  <script>
+    const emailEl = document.getElementById('email');
+    const sendCodeBtn = document.getElementById('sendCodeBtn');
+    const codeArea = document.getElementById('codeArea');
+    const codeEl = document.getElementById('code');
+    const verifyBtn = document.getElementById('verifyBtn');
+    const note = document.getElementById('note');
+    const googleBtn = document.getElementById('googleBtn');
+    const microsoftBtn = document.getElementById('microsoftBtn');
+    const guestBtn = document.getElementById('guestBtn');
+
+    function msg(t, ok=false){ note.textContent=t; note.className = 'note ' + (ok? 'ok':'err'); }
+
+    googleBtn.onclick = () => { window.location.href = '/auth/google'; };
+    microsoftBtn.onclick = () => { window.location.href = '/auth/microsoft'; };
+    guestBtn.onclick = () => { window.location.href = '/draco.html'; };
+
+    sendCodeBtn.onclick = async () => {
+      const email = (emailEl.value||'').trim().toLowerCase();
+      if(!email || !email.includes('@')){ msg('Please enter a valid email.'); return; }
+      try{
+        const r = await fetch('/auth/email/start', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email}) });
+        const d = await r.json();
+        if(!d.ok){ msg('Failed to send code: ' + (d.error||'unknown')); return; }
+        codeArea.style.display = '';
+        msg('Code sent. Check your email. (Also printed in server logs for local dev.)', true);
+      }catch(e){ msg('Request failed.'); }
+    };
+
+    verifyBtn.onclick = async () => {
+      const email = (emailEl.value||'').trim().toLowerCase();
+      const code = (codeEl.value||'').trim();
+      if(!email || !code){ msg('Enter email and code.'); return; }
+      try{
+        const r = await fetch('/auth/email/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, code}) });
+        const d = await r.json();
+        if(!d.ok){ msg('Verification failed: ' + (d.error||'unknown')); return; }
+        window.location.href = '/';
+      }catch(e){ msg('Request failed.'); }
+    };
+  </script>
+</body>
+</html>
+
+
