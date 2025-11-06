@@ -18,7 +18,7 @@ from urllib.parse import quote as url_quote
 from collections import deque
 from typing import Optional
 
-from flask import Flask, send_from_directory, request
+from flask import Flask, send_from_directory, request, session, redirect, url_for, jsonify
 from flask_socketio import SocketIO, emit
 
 # optional imports (best-effort)
@@ -69,6 +69,7 @@ ON_SERVER = ON_RENDER or (os.environ.get("PORT") is not None) or (os.environ.get
 # Force Flask-SocketIO to use threading instead of eventlet or gevent
 os.environ["FLASK_SOCKETIO_ASYNC_MODE"] = "threading"
 app = Flask(__name__, static_folder=".", template_folder=".")
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-me")
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 # ------------- Global utilities & config -------------
@@ -77,6 +78,8 @@ NOTES_FILE = "notes.json"
 REMINDERS_FILE = "reminders.json"
 WEATHER_API_KEY = ""   # add your OpenWeatherMap key if desired
 NEWSAPI_KEY = ""       # add your News API key if desired
+USERS_DIR = os.path.join(os.getcwd(), "users")
+EMAIL_CODES_FILE = os.path.join(os.getcwd(), "email_codes.json")
 
 def safe_write_json(path, data):
     with open(path, "w", encoding="utf-8") as f:
@@ -90,6 +93,49 @@ def safe_read_json(path, default):
         except Exception:
             return default
     return default
+
+def ensure_dir(path):
+    try:
+        os.makedirs(path, exist_ok=True)
+    except Exception:
+        pass
+
+def sanitize_email_for_path(email: str) -> str:
+    # basic safe filename for email
+    return email.replace("@", "_at_").replace(".", "_dot_")
+
+def user_paths(email: str):
+    root = os.path.join(USERS_DIR, sanitize_email_for_path(email))
+    ensure_dir(root)
+    return {
+        "root": root,
+        "profile": os.path.join(root, "profile.json"),
+        "chat": os.path.join(root, "chat.json"),
+    }
+
+def get_logged_in_email() -> Optional[str]:
+    e = session.get("user_email")
+    if isinstance(e, str) and "@" in e:
+        return e
+    return None
+
+def save_chat_line(email: str, who: str, text: str):
+    p = user_paths(email)
+    chat = safe_read_json(p["chat"], [])
+    chat.append({"ts": time.time(), "who": who, "text": text})
+    safe_write_json(p["chat"], chat)
+
+def get_chat_history(email: str):
+    p = user_paths(email)
+    return safe_read_json(p["chat"], [])
+
+def get_user_profile(email: str):
+    p = user_paths(email)
+    return safe_read_json(p["profile"], {})
+
+def set_user_profile(email: str, profile: dict):
+    p = user_paths(email)
+    safe_write_json(p["profile"], profile or {})
 
 # ------------- Memory / Personality -------------
 class MemoryManager:
@@ -485,13 +531,27 @@ def process_command(raw_cmd: str) -> str:
         return "Please say something."
 
     cmd = raw_cmd.strip().lower()
+    # Save to global session memory
     memory.add(f"You: {raw_cmd}")
+    # If logged in, append to per-user chat history
+    user_email = get_logged_in_email()
+    if user_email:
+        try:
+            save_chat_line(user_email, "user", raw_cmd)
+        except Exception:
+            pass
     personality.update(cmd)
 
     # greetings / small talk
     if any(x in cmd for x in ["hello", "hi", "hey"]):
         reply = personality.respond(f"Hello {memory.get_pref('name', 'friend')}! How can I help?")
         speak(reply)
+        # personalize greeting if user profile has name
+        user_email = get_logged_in_email()
+        if user_email:
+            prof = get_user_profile(user_email)
+            name = prof.get("name") or memory.get_pref('name', 'friend')
+            reply = reply.replace("friend", name)
         return reply
 
     if "how are you" in cmd:
@@ -806,8 +866,128 @@ def process_command(raw_cmd: str) -> str:
 # ------------- Flask / SocketIO endpoints -------------
 @app.route("/")
 def index():
-    # serve draco.html in current dir
+    # Redirect to login if not authenticated
+    if not get_logged_in_email():
+        return redirect(url_for("login_page"))
     return send_from_directory(".", "draco.html")
+
+@app.route("/login")
+def login_page():
+    return send_from_directory(".", "login.html")
+
+@app.route("/logout")
+def logout_page():
+    session.clear()
+    return redirect(url_for("login_page"))
+
+@app.route("/me")
+def me():
+    email = get_logged_in_email()
+    if not email:
+        return {"logged_in": False}
+    prof = get_user_profile(email)
+    return {"logged_in": True, "email": email, "profile": prof}
+
+@app.route("/api/profile", methods=["GET", "POST"])
+def api_profile():
+    email = get_logged_in_email()
+    if not email:
+        return {"ok": False, "error": "not_authenticated"}, 401
+    if request.method == "GET":
+        return {"ok": True, "profile": get_user_profile(email)}
+    data = request.json or {}
+    if not isinstance(data, dict):
+        return {"ok": False, "error": "invalid"}, 400
+    prof = get_user_profile(email)
+    prof.update({k: v for k, v in data.items() if isinstance(k, str)})
+    set_user_profile(email, prof)
+    return {"ok": True, "profile": prof}
+
+@app.route("/api/chat_history", methods=["GET"]) 
+def api_chat_history():
+    email = get_logged_in_email()
+    if not email:
+        return {"ok": False, "error": "not_authenticated"}, 401
+    return {"ok": True, "items": get_chat_history(email)}
+
+def _email_codes():
+    return safe_read_json(EMAIL_CODES_FILE, {})
+
+def _save_email_codes(d):
+    safe_write_json(EMAIL_CODES_FILE, d)
+
+def _send_code_via_email(email: str, code: str) -> None:
+    # Best-effort: print to console. Optionally send via SMTP if configured.
+    print(f"[LOGIN] Verification code for {email}: {code}")
+    # Optional SMTP: set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM
+    host = os.environ.get("SMTP_HOST")
+    if not host:
+        return
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+        msg = MIMEText(f"Your Draco login code is: {code}\nThis code expires in 10 minutes.")
+        msg["Subject"] = "Your Draco verification code"
+        msg["From"] = os.environ.get("SMTP_FROM", os.environ.get("SMTP_USER", "draco@login"))
+        msg["To"] = email
+        port = int(os.environ.get("SMTP_PORT", "587"))
+        user = os.environ.get("SMTP_USER")
+        pwd = os.environ.get("SMTP_PASS")
+        with smtplib.SMTP(host, port) as s:
+            s.starttls()
+            if user and pwd:
+                s.login(user, pwd)
+            s.sendmail(msg["From"], [email], msg.as_string())
+    except Exception as e:
+        print("SMTP send failed:", e)
+
+@app.route("/auth/email/start", methods=["POST"]) 
+def auth_email_start():
+    data = request.json or {}
+    email = str(data.get("email", "")).strip().lower()
+    if not email or "@" not in email:
+        return {"ok": False, "error": "invalid_email"}, 400
+    codes = _email_codes()
+    code = str(random.randint(100000, 999999))
+    codes[email] = {"code": code, "ts": time.time()}
+    _save_email_codes(codes)
+    _send_code_via_email(email, code)
+    return {"ok": True}
+
+@app.route("/auth/email/verify", methods=["POST"]) 
+def auth_email_verify():
+    data = request.json or {}
+    email = str(data.get("email", "")).strip().lower()
+    code = str(data.get("code", "")).strip()
+    codes = _email_codes()
+    rec = codes.get(email)
+    if not rec:
+        return {"ok": False, "error": "start_first"}, 400
+    if rec.get("code") != code:
+        return {"ok": False, "error": "wrong_code"}, 400
+    if time.time() - float(rec.get("ts", 0)) > 600:
+        return {"ok": False, "error": "expired"}, 400
+    # success: log user in
+    session["user_email"] = email
+    # initialize storage
+    _ = user_paths(email)
+    # Remove used code
+    try:
+        codes.pop(email, None)
+        _save_email_codes(codes)
+    except Exception:
+        pass
+    return {"ok": True}
+
+@app.route("/auth/google")
+def auth_google_start():
+    # Placeholder: requires OAuth client setup. Redirect to login with message if not configured.
+    return redirect(url_for("login_page"))
+
+@app.route("/auth/microsoft")
+def auth_microsoft_start():
+    # Placeholder: requires OAuth client setup. Redirect to login with message if not configured.
+    return redirect(url_for("login_page"))
 
 @app.route("/api/echo", methods=["POST"])
 def api_echo():
@@ -820,6 +1000,13 @@ def api_command():
     text = str(data.get("text", ""))
     try:
         resp = process_command(text)
+        # persist bot reply in user's chat history
+        user_email = get_logged_in_email()
+        if user_email and not isinstance(resp, dict):
+            try:
+                save_chat_line(user_email, "bot", str(resp))
+            except Exception:
+                pass
         if isinstance(resp, dict):
             out = {"ok": True}
             out.update(resp)
@@ -848,6 +1035,13 @@ def ws_user_command(payload):
             emit("draco_response", response)
         else:
             emit("draco_response", {"text": response})
+        # persist bot reply for logged-in users
+        user_email = get_logged_in_email()
+        if user_email and not isinstance(response, dict):
+            try:
+                save_chat_line(user_email, "bot", str(response))
+            except Exception:
+                pass
     except Exception as e:
         print("Error handling user_command:", e)
         emit("draco_response", {"text": "Error processing command."})
