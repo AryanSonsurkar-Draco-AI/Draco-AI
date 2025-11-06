@@ -1083,43 +1083,56 @@ def _email_codes():
 def _save_email_codes(d):
     safe_write_json(EMAIL_CODES_FILE, d)
 
-def _send_code_via_email(email: str, code: str) -> None:
-    # Best-effort: print to console. Optionally send via SMTP if configured.
-    print(f"[LOGIN] Verification code for {email}: {code}")
-    # Optional SMTP: set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM
-    host = os.environ.get("SMTP_HOST")
-    if not host:
-        return
-    try:
-        import smtplib
-        from email.mime.text import MIMEText
-        msg = MIMEText(f"Your Draco login code is: {code}\nThis code expires in 10 minutes.")
-        msg["Subject"] = "Your Draco verification code"
-        msg["From"] = os.environ.get("SMTP_FROM", os.environ.get("SMTP_USER", "draco@login"))
-        msg["To"] = email
-        port = int(os.environ.get("SMTP_PORT", "587"))
-        user = os.environ.get("SMTP_USER")
-        pwd = os.environ.get("SMTP_PASS")
-        with smtplib.SMTP(host, port) as s:
-            s.starttls()
-            if user and pwd:
-                s.login(user, pwd)
-            s.sendmail(msg["From"], [email], msg.as_string())
-    except Exception as e:
-        print("SMTP send failed:", e)
+def _send_code_via_email(to_email, code):
+    import smtplib
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    import os
 
-@app.route("/auth/email/start", methods=["POST"]) 
-def auth_email_start():
-    data = request.json or {}
-    email = str(data.get("email", "")).strip().lower()
-    if not email or "@" not in email:
-        return {"ok": False, "error": "invalid_email"}, 400
-    codes = _email_codes()
+    sender = os.getenv("SMTP_USER")
+    password = os.getenv("SMTP_PASS")
+    host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    port = int(os.getenv("SMTP_PORT", 587))
+
+    subject = "Your Draco Verification Code"
+    body = f"Hey there! 👋\n\nYour verification code is: {code}\n\nEnter this code in Draco to continue."
+
+    msg = MIMEMultipart()
+    msg["From"] = sender
+    msg["To"] = to_email
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
+
+    try:
+        with smtplib.SMTP(host, port) as server:
+            server.starttls()
+            server.login(sender, password)
+            server.send_message(msg)
+            print(f"✅ Verification code sent to {to_email}")
+    except Exception as e:
+        print(f"❌ SMTP send failed: {e}")
+
+
+@app.route("/auth/email/start", methods=["POST"])
+def start_email_auth():
+    data = request.get_json()
+    email = data.get("email")
+
+    if not email:
+        return jsonify({"error": "Email required"}), 400
+
     code = str(random.randint(100000, 999999))
-    codes[email] = {"code": code, "ts": time.time()}
-    _save_email_codes(codes)
+    # Save code to file
+    with open("email_codes.json", "r+") as f:
+        codes = json.load(f)
+        codes[email] = {"code": code, "timestamp": time.time()}
+        f.seek(0)
+        json.dump(codes, f, indent=2)
+
+    # Send the email
     _send_code_via_email(email, code)
-    return {"ok": True}
+
+    return jsonify({"message": "Code sent successfully"})
 
 @app.route("/auth/email/verify", methods=["POST"]) 
 def auth_email_verify():
