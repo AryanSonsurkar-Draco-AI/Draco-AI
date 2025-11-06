@@ -3,7 +3,8 @@
 # Save next to draco.html and run: python main.py
 # Required packages (example):
 # pip install flask flask-socketio pyttsx3 pygame SpeechRecognition ddgs psutil pyautogui pywhatkit
-
+from sendgrid import SendGridAPIClient
+from sendgrid.helpers.mail import Mail
 import os
 import sys
 import time
@@ -17,7 +18,7 @@ import webbrowser
 from urllib.parse import quote as url_quote
 from collections import deque
 from typing import Optional
-
+from flask import session
 from flask import Flask, send_from_directory, request, session, redirect, url_for, jsonify
 from flask_socketio import SocketIO, emit
 
@@ -1083,81 +1084,55 @@ def _email_codes():
 def _save_email_codes(d):
     safe_write_json(EMAIL_CODES_FILE, d)
 
-def _send_code_via_email(to_email, code):
-    import smtplib
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
-    import os
+def generate_verification_code(length=6):
+    return ''.join(str(random.randint(0, 9)) for _ in range(length))
 
-    sender = os.getenv("SMTP_USER")
-    password = os.getenv("SMTP_PASS")
-    host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    port = int(os.getenv("SMTP_PORT", 587))
-
-    subject = "Your Draco Verification Code"
-    body = f"Hey there! 👋\n\nYour verification code is: {code}\n\nEnter this code in Draco to continue."
-
-    msg = MIMEMultipart()
-    msg["From"] = sender
-    msg["To"] = to_email
-    msg["Subject"] = subject
-    msg.attach(MIMEText(body, "plain"))
-
+def send_verification_email(to_email, code):
+    message = Mail(
+        from_email='your_verified_email@example.com',  # must be verified in SendGrid
+        to_emails=to_email,
+        subject='Your Draco Verification Code',
+        html_content=f"<p>Your verification code is: <b>{code}</b></p>"
+    )
     try:
-        with smtplib.SMTP(host, port) as server:
-            server.starttls()
-            server.login(sender, password)
-            server.send_message(msg)
-            print(f"✅ Verification code sent to {to_email}")
+        sg = SendGridAPIClient(os.environ.get("SENDGRID_API_KEY"))
+        response = sg.send(message)
+        print(f"Email sent! Status code: {response.status_code}")
+        return True
     except Exception as e:
-        print(f"❌ SMTP send failed: {e}")
+        print(f"Error sending email: {e}")
+        return False
 
-
-@app.route("/auth/email/start", methods=["POST"])
-def start_email_auth():
-    data = request.get_json()
-    email = data.get("email")
-
-    if not email:
-        return jsonify({"error": "Email required"}), 400
-
-    code = str(random.randint(100000, 999999))
-    # Save code to file
-    with open("email_codes.json", "r+") as f:
-        codes = json.load(f)
-        codes[email] = {"code": code, "timestamp": time.time()}
-        f.seek(0)
-        json.dump(codes, f, indent=2)
-
-    # Send the email
-    _send_code_via_email(email, code)
-
-    return jsonify({"message": "Code sent successfully"})
-
-@app.route("/auth/email/verify", methods=["POST"]) 
-def auth_email_verify():
+@app.route("/api/send_verification", methods=["POST"])
+def send_verification():
     data = request.json or {}
-    email = str(data.get("email", "")).strip().lower()
-    code = str(data.get("code", "")).strip()
-    codes = _email_codes()
-    rec = codes.get(email)
-    if not rec:
-        return {"ok": False, "error": "start_first"}, 400
-    if rec.get("code") != code:
-        return {"ok": False, "error": "wrong_code"}, 400
-    if time.time() - float(rec.get("ts", 0)) > 600:
-        return {"ok": False, "error": "expired"}, 400
-    # success: log user in
-    session["user_email"] = email
-    # initialize storage
-    _ = user_paths(email)
-    # Remove used code
-    try:
-        codes.pop(email, None)
-        _save_email_codes(codes)
-    except Exception:
-        pass
-    return {"ok": True}
+    to_email = data.get("email")
+    if not to_email:
+        return {"ok": False, "error": "Missing recipient email"}, 400
+
+    code = generate_verification_code()
+    success = send_verification_email(to_email, code)
+    if success:
+        # Save code in session temporarily
+        session["verification_code"] = code
+        session["verification_email"] = to_email
+        return {"ok": True, "message": "Verification code sent!"}
+    return {"ok": False, "error": "Failed to send email"}, 500
+
+@app.route("/api/verify_code", methods=["POST"])
+def verify_code():
+    data = request.json or {}
+    code = data.get("code")
+    email = data.get("email")
+    if not code or not email:
+        return {"ok": False, "error": "Missing fields"}, 400
+
+    if session.get("verification_email") == email and session.get("verification_code") == code:
+        session.pop("verification_code", None)
+        session.pop("verification_email", None)
+        return {"ok": True, "message": "Verified!"}
+
+    return {"ok": False, "error": "Invalid code"}, 401
 
 @app.route("/auth/google")
 def auth_google_start():
