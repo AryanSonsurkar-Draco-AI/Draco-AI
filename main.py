@@ -976,9 +976,10 @@ def process_command(raw_cmd: str) -> str:
 # ------------- Flask / SocketIO endpoints -------------
 @app.route("/")
 def index():
-    # Redirect to login if not authenticated
-    if not get_logged_in_email():
-        return redirect(url_for("login_page"))
+    # If logged in → show main app
+    if get_logged_in_email():
+        return send_from_directory(".", "draco.html")
+    # Otherwise → open in guest mode
     return send_from_directory(".", "draco.html")
 
 @app.route("/login")
