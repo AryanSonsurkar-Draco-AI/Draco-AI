@@ -1089,7 +1089,7 @@ def generate_verification_code(length=6):
 
 def send_verification_email(to_email, code):
     message = Mail(
-        from_email='your_verified_email@example.com',  # must be verified in SendGrid
+        from_email='aryansonsurkar87@example.com',  # must be verified in SendGrid
         to_emails=to_email,
         subject='Your Draco Verification Code',
         html_content=f"<p>Your verification code is: <b>{code}</b></p>"
