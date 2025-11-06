@@ -145,7 +145,7 @@
     function hideProviders(){ provGoogle.classList.remove('show'); provMS.classList.remove('show'); }
     googleBtn.onclick = () => { hideProviders(); provGoogle.classList.add('show'); emailG.focus(); };
     microsoftBtn.onclick = () => { hideProviders(); provMS.classList.add('show'); emailM.focus(); };
-    guestBtn.onclick = () => { window.location.href = '/'; };
+    guestBtn.onclick = () => { window.location.href = '/guest'; };
     clearAll.onclick = () => { emailEl.value=''; codeEl.value=''; codeArea.style.display='none'; msg(''); }
 
     const msDomains = ['@outlook.com','@hotmail.com','@live.com','@msn.com','@microsoft.com'];
