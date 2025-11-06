@@ -110,7 +110,8 @@ def user_paths(email: str):
     return {
         "root": root,
         "profile": os.path.join(root, "profile.json"),
-        "chat": os.path.join(root, "chat.json"),
+        "chat": os.path.join(root, "chat.json"),  # legacy single-thread file
+        "chats": os.path.join(root, "chats.json"), # new: multi-chat storage
     }
 
 def get_logged_in_email() -> Optional[str]:
@@ -119,15 +120,124 @@ def get_logged_in_email() -> Optional[str]:
         return e
     return None
 
-def save_chat_line(email: str, who: str, text: str):
+def _load_chats(email: str):
     p = user_paths(email)
-    chat = safe_read_json(p["chat"], [])
-    chat.append({"ts": time.time(), "who": who, "text": text})
-    safe_write_json(p["chat"], chat)
+    chats = safe_read_json(p["chats"], None)
+    if chats is None:
+        # migrate from legacy chat.json into a single chat
+        legacy = safe_read_json(p["chat"], [])
+        chat_id = str(int(time.time() * 1000))
+        name = _summarize_chat_name(legacy)
+        chats = [{"id": chat_id, "name": name, "items": legacy, "updated_at": time.time()}]
+        safe_write_json(p["chats"], chats)
+    return chats
 
-def get_chat_history(email: str):
+def _save_chats(email: str, chats):
     p = user_paths(email)
-    return safe_read_json(p["chat"], [])
+    safe_write_json(p["chats"], chats)
+
+def _current_chat_id() -> Optional[str]:
+    cid = session.get("chat_id")
+    return str(cid) if cid else None
+
+def _set_current_chat_id(cid: str):
+    session["chat_id"] = str(cid)
+
+def _get_or_create_current_chat(email: str):
+    chats = _load_chats(email)
+    cid = _current_chat_id()
+    chat = None
+    if cid:
+        for c in chats:
+            if c.get("id") == cid:
+                chat = c
+                break
+    if chat is None:
+        # pick latest or create
+        if chats:
+            chats = sorted(chats, key=lambda c: c.get("updated_at", 0), reverse=True)
+            chat = chats[0]
+            _set_current_chat_id(chat.get("id"))
+        else:
+            chat = _create_new_chat(email)
+            chats = _load_chats(email)  # ensure persisted
+    return chat
+
+def _create_new_chat(email: str):
+    chats = _load_chats(email)
+    cid = str(int(time.time() * 1000))
+    chat = {"id": cid, "name": "New chat", "items": [], "updated_at": time.time()}
+    chats.append(chat)
+    _save_chats(email, chats)
+    _set_current_chat_id(cid)
+    return chat
+
+def _clear_current_chat(email: str):
+    chats = _load_chats(email)
+    cid = _current_chat_id()
+    for c in chats:
+        if c.get("id") == cid:
+            c["items"] = []
+            c["updated_at"] = time.time()
+            _save_chats(email, chats)
+            return True
+    return False
+
+STOPWORDS = set("the a an and or to for in of on with at by from as be is are was were it this that these those i you he she we they them our your my mine ours yours their his her its about into than too very just can could should would will shall may might do does did not no yes ok please hey hi hello how what when where which who why".split())
+
+def _summarize_chat_name(items):
+    # items: list of {who, text}
+    texts = [x.get("text", "") for x in items if x.get("who") == "user"]
+    if not texts:
+        texts = [x.get("text", "") for x in items]
+    combined = " ".join(texts).strip()
+    if not combined:
+        return datetime.datetime.now().strftime("Chat %b %d %H:%M")
+    # take first sentence
+    first = combined.split("\n")[0].split(".")[0]
+    words = [w.strip(" ,:;!?()[]{}\"'\t").lower() for w in first.split()]
+    filtered = [w for w in words if w and w not in STOPWORDS and all(ch.isalnum() or ch in "-_'" for ch in w)]
+    if not filtered:
+        # fallback: first few original words
+        filtered = first.split()
+    # min 2 words, max 10 words
+    if len(filtered) < 2:
+        extra = (combined.split())[0:2]
+        filtered = (filtered + extra)[:2]
+    name_words = filtered[:10]
+    name = " ".join(name_words).strip().title()
+    if len(name.split()) < 2:
+        name = (name + " Chat").strip()
+    return name[:80]
+
+def save_chat_line(email: str, who: str, text: str):
+    chats = _load_chats(email)
+    chat = _get_or_create_current_chat(email)
+    # refresh chats after current selection (IDs)
+    cid = chat.get("id")
+    for c in chats:
+        if c.get("id") == cid:
+            c.setdefault("items", []).append({"ts": time.time(), "who": who, "text": text})
+            # set name on first meaningful lines
+            if (not c.get("name")) or c.get("name") in ("New chat", ""):
+                c["name"] = _summarize_chat_name(c["items"]) or "New Chat"
+            c["updated_at"] = time.time()
+            break
+    _save_chats(email, chats)
+
+def get_chat_history(email: str, chat_id: Optional[str] = None):
+    chats = _load_chats(email)
+    cid = chat_id or _current_chat_id()
+    if cid:
+        for c in chats:
+            if c.get("id") == cid:
+                return c.get("items", [])
+    # default to latest
+    if chats:
+        chats = sorted(chats, key=lambda c: c.get("updated_at", 0), reverse=True)
+        _set_current_chat_id(chats[0].get("id"))
+        return chats[0].get("items", [])
+    return []
 
 def get_user_profile(email: str):
     p = user_paths(email)
@@ -908,7 +1018,53 @@ def api_chat_history():
     email = get_logged_in_email()
     if not email:
         return {"ok": False, "error": "not_authenticated"}, 401
-    return {"ok": True, "items": get_chat_history(email)}
+    chat_id = request.args.get("chat_id")
+    return {"ok": True, "items": get_chat_history(email, chat_id)}
+
+@app.route("/api/chats", methods=["GET"]) 
+def api_chats_list():
+    email = get_logged_in_email()
+    if not email:
+        return {"ok": False, "error": "not_authenticated"}, 401
+    chats = _load_chats(email)
+    # minimal list
+    out = [
+        {"id": c.get("id"), "name": c.get("name") or "New Chat", "updated_at": c.get("updated_at", 0)}
+        for c in chats
+    ]
+    out.sort(key=lambda x: x.get("updated_at", 0), reverse=True)
+    return {"ok": True, "chats": out, "current": _current_chat_id()}
+
+@app.route("/api/chats/new", methods=["POST"]) 
+def api_chats_new():
+    email = get_logged_in_email()
+    if not email:
+        return {"ok": False, "error": "not_authenticated"}, 401
+    c = _create_new_chat(email)
+    return {"ok": True, "chat": {"id": c.get("id"), "name": c.get("name")}}
+
+@app.route("/api/chats/select", methods=["POST"]) 
+def api_chats_select():
+    email = get_logged_in_email()
+    if not email:
+        return {"ok": False, "error": "not_authenticated"}, 401
+    data = request.json or {}
+    cid = str(data.get("chat_id", ""))
+    if not cid:
+        return {"ok": False, "error": "invalid"}, 400
+    chats = _load_chats(email)
+    if any(c.get("id") == cid for c in chats):
+        _set_current_chat_id(cid)
+        return {"ok": True}
+    return {"ok": False, "error": "not_found"}, 404
+
+@app.route("/api/chats/clear", methods=["POST"]) 
+def api_chats_clear():
+    email = get_logged_in_email()
+    if not email:
+        return {"ok": False, "error": "not_authenticated"}, 401
+    ok = _clear_current_chat(email)
+    return {"ok": ok}
 
 def _email_codes():
     return safe_read_json(EMAIL_CODES_FILE, {})

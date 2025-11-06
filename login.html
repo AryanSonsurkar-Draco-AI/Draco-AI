@@ -5,57 +5,109 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Draco • Sign in</title>
   <style>
-    :root { --bg:#0b1020; --card:#0f1230; --text:#eaf1ff; --muted:#98a3c4; --accent:#6f8dff; --accent2:#12ffe6; }
+    :root { --bg:#070b1a; --card:#0e1331; --text:#ecf2ff; --muted:#9aa8cc; --accent:#6f8dff; --accent2:#12ffe6; --line:rgba(111,141,255,.25); }
     * { box-sizing: border-box; }
     body { margin:0; font-family: ui-sans-serif, system-ui, Arial, sans-serif; color:var(--text);
-      background: radial-gradient(1000px 700px at 20% -10%, rgba(111,141,255,.18), transparent 60%),
-                  radial-gradient(900px 600px at 100% 0%, rgba(18,255,230,.10), transparent 55%),
-                  linear-gradient(180deg, #060812, var(--bg));
-      min-height:100dvh; display:grid; place-items:center; padding:20px;
+      background:
+        radial-gradient(1200px 700px at 15% -10%, rgba(111,141,255,.18), transparent 60%),
+        radial-gradient(900px 600px at 100% 0%, rgba(18,255,230,.10), transparent 55%),
+        linear-gradient(180deg, #060812, var(--bg));
+      min-height:100dvh; display:grid; place-items:center; padding:24px;
     }
-    .card { width:100%; max-width: 520px; background: linear-gradient(180deg, #0e1232, #0b0f29); border:1px solid rgba(111,141,255,.25); border-radius:16px; padding:22px; box-shadow: 0 0 18px rgba(111,141,255,.3), 0 0 36px rgba(18,255,230,.2); }
-    h1 { margin:0 0 8px; font-size:26px; }
+    .shell { width:100%; max-width:980px; display:grid; grid-template-columns: 1.2fr 1fr; gap:18px; align-items:stretch; }
+    .card { background: linear-gradient(180deg, #0f1436, #0b1030); border:1px solid var(--line); border-radius:16px; padding:22px; box-shadow: 0 0 18px rgba(111,141,255,.26), 0 0 36px rgba(18,255,230,.16); }
+    .hero { padding:26px; display:flex; flex-direction:column; justify-content:center; }
+    h1 { margin:0 0 8px; font-size:28px; letter-spacing:.2px; }
     p { margin:6px 0 16px; color:var(--muted); }
     .row { display:flex; gap:10px; }
-    .btn { width:100%; padding:12px; border-radius:10px; border:1px solid rgba(111,141,255,.35); background: linear-gradient(180deg, #1b2370, #16205a); color:var(--text); cursor:pointer; }
+    .btn { width:100%; padding:12px; border-radius:10px; border:1px solid rgba(111,141,255,.35); background: linear-gradient(180deg, #1b2370, #16205a); color:var(--text); cursor:pointer; box-shadow: 0 0 10px rgba(111,141,255,.18) inset; }
+    .btn:hover{ border-color: rgba(18,255,230,.55); box-shadow: 0 0 0 1px rgba(18,255,230,.15) inset; }
     .btn.alt { background: linear-gradient(180deg, #103b37, #0c2f2b); border-color: rgba(18,255,230,.45); }
     .btn.ghost { background: transparent; border-color: rgba(111,141,255,.25); }
+    .btn.small { width:auto; padding:8px 10px; font-size:13px; }
     .sep { text-align:center; color:var(--muted); margin:12px 0; }
-    .input { background:#0a0e26; border:1px solid rgba(111,141,255,.22); padding:10px 12px; border-radius:10px; color:var(--text); width:100%; }
+    .input { background:#0a0e26; border:1px solid rgba(111,141,255,.22); padding:12px 12px; border-radius:10px; color:var(--text); width:100%; }
     label { font-size:13px; color:var(--muted); display:block; margin:10px 0 6px; }
-    .note { color:var(--muted); font-size:13px; margin-top:10px; }
+    .note { color:var(--muted); font-size:13px; margin-top:10px; min-height:18px; }
     .ok { color:#38f3b8; }
     .err { color:#ff7b7b; }
+    .provider { display:none; margin-top:10px; padding:12px; border-radius:12px; background:#0b1230; border:1px dashed rgba(111,141,255,.35); }
+    .provider.show { display:block; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>Welcome to Draco</h1>
-    <p>Sign in to sync your chat history and personalize replies.</p>
-
-    <div class="row" style="margin-bottom:10px;">
-      <button class="btn" id="googleBtn">Continue with Google</button>
-      <button class="btn" id="microsoftBtn">Microsoft</button>
+  <div class="shell">
+    <div class="card hero">
+      <h1>Welcome to Draco</h1>
+      <p>Sign in to sync your chat history and personalize replies. Or continue as guest.</p>
+      <div class="row" style="margin-bottom:10px;">
+        <button class="btn" id="googleBtn">Continue with Google</button>
+        <button class="btn" id="microsoftBtn">Continue with Microsoft</button>
+      </div>
+      <div class="sep">or</div>
+      <button class="btn ghost" id="guestBtn">Stay logged out</button>
     </div>
 
-    <div class="sep">or</div>
+    <div class="card">
+      <h2 style="margin:0 0 8px; font-size:20px;">Sign in with email code</h2>
+      <p>We’ll send a 6‑digit code to verify it’s you.</p>
 
-    <div>
-      <label for="email">Email address</label>
+      <div class="provider" id="provGoogle">
+        <strong>Google</strong>
+        <p style="margin:6px 0 10px; color:var(--muted);">Use your Gmail address only (ends with <code>@gmail.com</code>).</p>
+        <label for="emailG">Gmail address</label>
+        <input id="emailG" class="input" type="email" placeholder="you@gmail.com" />
+        <div class="row" style="margin-top:10px;">
+          <button class="btn alt" id="sendG">Send code</button>
+          <button class="btn small ghost" id="cancelG">Cancel</button>
+        </div>
+        <div id="codeAreaG" style="display:none; margin-top:10px;">
+          <label for="codeG">Enter 6‑digit code</label>
+          <input id="codeG" class="input" type="text" inputmode="numeric" maxlength="6" placeholder="123456" />
+          <div class="row" style="margin-top:10px;">
+            <button class="btn" id="verifyG">Verify & Continue</button>
+            <button class="btn small ghost" id="resendG">Resend</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="provider" id="provMS">
+        <strong>Microsoft</strong>
+        <p style="margin:6px 0 10px; color:var(--muted);">Use Outlook/Hotmail/Live address.</p>
+        <label for="emailM">Microsoft email</label>
+        <input id="emailM" class="input" type="email" placeholder="you@outlook.com" />
+        <div class="row" style="margin-top:10px;">
+          <button class="btn alt" id="sendM">Send code</button>
+          <button class="btn small ghost" id="cancelM">Cancel</button>
+        </div>
+        <div id="codeAreaM" style="display:none; margin-top:10px;">
+          <label for="codeM">Enter 6‑digit code</label>
+          <input id="codeM" class="input" type="text" inputmode="numeric" maxlength="6" placeholder="123456" />
+          <div class="row" style="margin-top:10px;">
+            <button class="btn" id="verifyM">Verify & Continue</button>
+            <button class="btn small ghost" id="resendM">Resend</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="sep">or</div>
+      <label for="email">Any email</label>
       <input id="email" class="input" type="email" placeholder="you@example.com" />
-      <button class="btn alt" id="sendCodeBtn" style="margin-top:10px;">Send verification code</button>
+      <div class="row" style="margin-top:10px;">
+        <button class="btn alt" id="sendCodeBtn">Send code</button>
+        <button class="btn small ghost" id="clearAll">Clear</button>
+      </div>
+      <div id="codeArea" style="display:none; margin-top:10px;">
+        <label for="code">Enter 6‑digit code</label>
+        <input id="code" class="input" type="text" inputmode="numeric" maxlength="6" placeholder="123456" />
+        <div class="row" style="margin-top:10px;">
+          <button class="btn" id="verifyBtn">Verify & Continue</button>
+          <button class="btn small ghost" id="resend">Resend</button>
+        </div>
+      </div>
+
+      <div class="note" id="note"></div>
     </div>
-
-    <div id="codeArea" style="display:none;">
-      <label for="code">Enter 6-digit code</label>
-      <input id="code" class="input" type="text" inputmode="numeric" maxlength="6" placeholder="123456" />
-      <button class="btn" id="verifyBtn" style="margin-top:10px;">Verify & Continue</button>
-    </div>
-
-    <div class="sep">or</div>
-    <button class="btn ghost" id="guestBtn">Stay logged out</button>
-
-    <div class="note" id="note"></div>
   </div>
 
   <script>
@@ -68,12 +120,37 @@
     const googleBtn = document.getElementById('googleBtn');
     const microsoftBtn = document.getElementById('microsoftBtn');
     const guestBtn = document.getElementById('guestBtn');
+    const clearAll = document.getElementById('clearAll');
+
+    // Provider sections
+    const provGoogle = document.getElementById('provGoogle');
+    const provMS = document.getElementById('provMS');
+    const emailG = document.getElementById('emailG');
+    const sendG = document.getElementById('sendG');
+    const cancelG = document.getElementById('cancelG');
+    const codeAreaG = document.getElementById('codeAreaG');
+    const codeG = document.getElementById('codeG');
+    const verifyG = document.getElementById('verifyG');
+    const resendG = document.getElementById('resendG');
+    const emailM = document.getElementById('emailM');
+    const sendM = document.getElementById('sendM');
+    const cancelM = document.getElementById('cancelM');
+    const codeAreaM = document.getElementById('codeAreaM');
+    const codeM = document.getElementById('codeM');
+    const verifyM = document.getElementById('verifyM');
+    const resendM = document.getElementById('resendM');
 
     function msg(t, ok=false){ note.textContent=t; note.className = 'note ' + (ok? 'ok':'err'); }
 
-    googleBtn.onclick = () => { window.location.href = '/auth/google'; };
-    microsoftBtn.onclick = () => { window.location.href = '/auth/microsoft'; };
+    function hideProviders(){ provGoogle.classList.remove('show'); provMS.classList.remove('show'); }
+    googleBtn.onclick = () => { hideProviders(); provGoogle.classList.add('show'); emailG.focus(); };
+    microsoftBtn.onclick = () => { hideProviders(); provMS.classList.add('show'); emailM.focus(); };
     guestBtn.onclick = () => { window.location.href = '/draco.html'; };
+    clearAll.onclick = () => { emailEl.value=''; codeEl.value=''; codeArea.style.display='none'; msg(''); }
+
+    const msDomains = ['@outlook.com','@hotmail.com','@live.com','@msn.com','@microsoft.com'];
+    function isValidGoogleEmail(e){ return /@gmail\.com$/i.test(e); }
+    function isValidMsEmail(e){ return msDomains.some(d => e.toLowerCase().endsWith(d)); }
 
     sendCodeBtn.onclick = async () => {
       const email = (emailEl.value||'').trim().toLowerCase();
@@ -94,7 +171,57 @@
       try{
         const r = await fetch('/auth/email/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, code}) });
         const d = await r.json();
-        if(!d.ok){ msg('Verification failed: ' + (d.error||'unknown')); return; }
+        if(!d.ok){ msg('Verification failed: ' + (d.error||'unknown')); codeEl.value=''; return; }
+        window.location.href = '/';
+      }catch(e){ msg('Request failed.'); }
+    };
+
+    // Google flow
+    cancelG.onclick = () => { provGoogle.classList.remove('show'); };
+    resendG.onclick = async () => sendG.click();
+    sendG.onclick = async () => {
+      const email = (emailG.value||'').trim().toLowerCase();
+      if(!isValidGoogleEmail(email)){ msg('Use a valid Gmail address (ends with @gmail.com).'); return; }
+      try{
+        const r = await fetch('/auth/email/start', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email}) });
+        const d = await r.json();
+        if(!d.ok){ msg('Failed to send code: ' + (d.error||'unknown')); return; }
+        codeAreaG.style.display=''; msg('Gmail code sent. Check your inbox.', true);
+      }catch(e){ msg('Request failed.'); }
+    };
+    verifyG.onclick = async () => {
+      const email = (emailG.value||'').trim().toLowerCase();
+      const code = (codeG.value||'').trim();
+      if(!email || !code){ msg('Enter Gmail and code.'); return; }
+      try{
+        const r = await fetch('/auth/email/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, code}) });
+        const d = await r.json();
+        if(!d.ok){ msg('Wrong code. Resending recommended.'); codeG.value=''; return; }
+        window.location.href = '/';
+      }catch(e){ msg('Request failed.'); }
+    };
+
+    // Microsoft flow
+    cancelM.onclick = () => { provMS.classList.remove('show'); };
+    resendM.onclick = async () => sendM.click();
+    sendM.onclick = async () => {
+      const email = (emailM.value||'').trim().toLowerCase();
+      if(!isValidMsEmail(email)){ msg('Use a Microsoft address (e.g., @outlook.com, @hotmail.com).'); return; }
+      try{
+        const r = await fetch('/auth/email/start', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email}) });
+        const d = await r.json();
+        if(!d.ok){ msg('Failed to send code: ' + (d.error||'unknown')); return; }
+        codeAreaM.style.display=''; msg('Code sent to your Microsoft email.', true);
+      }catch(e){ msg('Request failed.'); }
+    };
+    verifyM.onclick = async () => {
+      const email = (emailM.value||'').trim().toLowerCase();
+      const code = (codeM.value||'').trim();
+      if(!email || !code){ msg('Enter email and code.'); return; }
+      try{
+        const r = await fetch('/auth/email/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, code}) });
+        const d = await r.json();
+        if(!d.ok){ msg('Wrong code. Try again or resend.'); codeM.value=''; return; }
         window.location.href = '/';
       }catch(e){ msg('Request failed.'); }
     };
