@@ -23,7 +23,7 @@
                   linear-gradient(180deg, var(--bg-start), var(--bg-end));
       min-height: 100dvh;
     }
-    .wrap { max-width: 880px; margin: 48px auto; padding: 0 18px; }
+    .wrap { max-width: 1100px; margin: 32px auto; padding: 0 18px; }
     h1 { font-size: 30px; margin: 0 0 10px; letter-spacing: 0.4px; }
     .status { display:flex; align-items:center; gap:8px; color: var(--muted); font-size: 14px; margin-bottom: 14px; }
     .dot { width:10px; height:10px; border-radius:50%; background:#ff5c5c; box-shadow: 0 0 8px rgba(255,92,92,.6); }
@@ -38,36 +38,69 @@
     .chipbar { display:flex; flex-wrap: wrap; gap:8px; margin-top:10px; }
     .chip { padding:8px 12px; border-radius: 999px; border:1px solid rgba(111,141,255,.28); color:#cfe3ff; background: linear-gradient(180deg, #10173d, #0c1434); cursor:pointer; box-shadow: 0 0 0 1px rgba(18,255,230,.05) inset; }
     .chip:hover { box-shadow: var(--glow); }
-    .log { margin-top: 16px; max-height: 440px; overflow: auto; padding-right: 4px; }
+    .log { margin-top: 16px; max-height: 520px; overflow: auto; padding-right: 4px; }
     .item { background:#0a0f2a; border:1px solid rgba(111,141,255,.18); border-radius: 12px; padding:12px; margin:10px 0; box-shadow: 0 0 0 1px rgba(18,255,230,.05) inset; }
     .user { color:#9ec0ff; text-shadow: 0 0 8px rgba(111,141,255,.4); }
     .bot { color:#8bffe7; text-shadow: 0 0 10px rgba(18,255,230,.5); }
     small { color:var(--muted); }
+    /* layout: sidebar + main */
+    .layout { display:grid; grid-template-columns: 290px 1fr; gap:14px; }
+    .side { background: linear-gradient(180deg, #0f1436, #0b1030); border:1px solid rgba(111,141,255,.22); border-radius:14px; padding:14px; }
+    .profile { display:flex; align-items:center; gap:10px; padding:8px; border-bottom:1px solid rgba(111,141,255,.18); }
+    .avatar { width:36px; height:36px; border-radius:50%; background:#16205a; display:grid; place-items:center; color:#cfe3ff; border:1px solid rgba(111,141,255,.35); }
+    .meta small { color:var(--muted); display:block; }
+    .history { margin-top:12px; max-height: 520px; overflow:auto; }
+    .hitem { padding:8px 10px; border-radius:10px; border:1px solid rgba(111,141,255,.18); margin:8px 0; color:#cfe3ff; background:#0a0f2a; cursor:pointer; }
+    .hitem:hover { box-shadow: var(--glow); }
+    .sideActions { display:flex; gap:8px; margin-top:10px; }
+    .toggleBar { text-align:right; margin-bottom:8px; }
+    .layout.collapsed { grid-template-columns: 0 1fr; }
+    .layout.expanded { grid-template-columns: 420px 1fr; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Draco Assistant</h1>
     <div class="status"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
-    <div class="card">
-      <div class="input" style="margin-bottom:10px;">
-        <input id="input" type="text" placeholder="Type a command (e.g., open youtube, play music, take note ...)" />
-        <button class="btn" id="sendBtn">Send</button>
+    <div class="toggleBar">
+      <button class="btn" id="toggleSide">Hide Sidebar</button>
+      <button class="btn" id="expandSide">Expand</button>
+    </div>
+    <div class="layout" id="layout">
+      <div class="side" id="sidebar">
+        <div class="profile">
+          <div class="avatar" id="avatar">U</div>
+          <div class="meta">
+            <div id="profName">Guest</div>
+            <small id="profEmail">Not signed in</small>
+          </div>
+        </div>
+        <div class="sideActions">
+          <button class="btn" id="newChat">New Chat</button>
+          <button class="btn" id="clearChat">Clear</button>
+        </div>
+        <div class="history" id="history"></div>
       </div>
-      <div class="row" style="margin-bottom:10px;">
-        <button class="btn" id="micBtn">🎤 Speak</button>
-        <button class="btn" id="stopSpeakBtn">🛑 Stop Voice</button>
+      <div class="card">
+        <div class="input" style="margin-bottom:10px;">
+          <input id="input" type="text" placeholder="Type a command (e.g., open youtube, play music, take note ...)" />
+          <button class="btn" id="sendBtn">Send</button>
+        </div>
+        <div class="row" style="margin-bottom:10px;">
+          <button class="btn" id="micBtn">🎤 Speak</button>
+          <button class="btn" id="stopSpeakBtn">🛑 Stop Voice</button>
+        </div>
+        <div class="chipbar" id="chips">
+          <div class="chip" data-cmd="open youtube">Open YouTube</div>
+          <div class="chip" data-cmd="play music">Play Music</div>
+          <div class="chip" data-cmd="take note buy milk">Take Note</div>
+          <div class="chip" data-cmd="list notes">List Notes</div>
+          <div class="chip" data-cmd="system status">System Status</div>
+          <div class="chip" data-cmd="search for render deployment guide">Search Web</div>
+        </div>
+        <div class="log" id="log"></div>
+        <small>Tip: Try "open youtube", "play music", "list notes", "remind me to drink water at 19:30"</small>
       </div>
-      <div class="chipbar" id="chips">
-        <div class="chip" data-cmd="open youtube">Open YouTube</div>
-        <div class="chip" data-cmd="play music">Play Music</div>
-        <div class="chip" data-cmd="take note buy milk">Take Note</div>
-        <div class="chip" data-cmd="list notes">List Notes</div>
-        <div class="chip" data-cmd="system status">System Status</div>
-        <div class="chip" data-cmd="search for render deployment guide">Search Web</div>
-      </div>
-      <div class="log" id="log"></div>
-      <small>Tip: Try "open youtube", "play music", "list notes", "remind me to drink water at 19:30"</small>
     </div>
   </div>
 
@@ -83,6 +116,8 @@
 
     let socket = null;
     let user = { logged_in: false, email: null, profile: {} };
+    let historyItems = [];
+    let chatsList = [];
     try {
       socket = io({ transports: ['websocket', 'polling'], withCredentials: false });
     } catch (e) {
@@ -95,6 +130,57 @@
       el.innerHTML = `<div class="${who}">${text}</div>`;
       log.appendChild(el);
       log.scrollTop = log.scrollHeight;
+    }
+
+    function initials(name) {
+      if (!name) return 'U';
+      const parts = name.trim().split(/\s+/);
+      const a = parts[0]?.[0] || '';
+      const b = parts[1]?.[0] || '';
+      return (a + b).toUpperCase() || 'U';
+    }
+
+    function renderProfile() {
+      const profName = document.getElementById('profName');
+      const profEmail = document.getElementById('profEmail');
+      const avatar = document.getElementById('avatar');
+      const name = (user.profile && user.profile.name) ? user.profile.name : (user.logged_in ? 'You' : 'Guest');
+      profName.textContent = name;
+      profEmail.textContent = user.logged_in ? (user.email||'') : 'Not signed in';
+      avatar.textContent = initials(name);
+    }
+
+    function renderHistory() {
+      const container = document.getElementById('history');
+      if (!container) return;
+      container.innerHTML = '';
+      // Render chat list with names first
+      const list = document.createElement('div');
+      (chatsList || []).forEach((c) => {
+        const d = document.createElement('div');
+        d.className = 'hitem';
+        d.textContent = c.name || 'New Chat';
+        d.onclick = async () => {
+          try {
+            await fetch('/api/chats/select', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ chat_id: c.id }) });
+            await loadHistory();
+          } catch (e) {}
+        };
+        list.appendChild(d);
+      });
+      container.appendChild(list);
+      // recent messages preview under list
+      historyItems.slice(-30).forEach((it) => {
+        const text = (it.who === 'user' ? 'You: ' : 'Draco: ') + it.text;
+        const d = document.createElement('div');
+        d.className = 'hitem';
+        d.textContent = text.length > 80 ? text.slice(0, 77) + '…' : text;
+        try { d.title = new Date((it.ts||0)*1000).toLocaleString(); } catch (e) {}
+        d.onclick = () => {
+          appendItem(it.text, it.who === 'user' ? 'user' : 'bot');
+        };
+        container.appendChild(d);
+      });
     }
 
     let voiceEnabled = false;
@@ -150,6 +236,7 @@
           return;
         }
         appendItem('Signed in as ' + user.email, 'bot');
+        renderProfile();
         await loadHistory();
         await maybeRunOnboarding();
       } catch (e) { /* ignore */ }
@@ -157,13 +244,22 @@
 
     async function loadHistory() {
       try {
-        const r = await fetch('/api/chat_history');
-        if (!r.ok) return;
-        const d = await r.json();
+        const [h, l] = await Promise.all([
+          fetch('/api/chat_history'),
+          fetch('/api/chats')
+        ]);
+        if (!h.ok) return;
+        const d = await h.json();
         if (!d.ok) return;
-        (d.items||[]).slice(-50).forEach(it => {
+        historyItems = d.items || [];
+        if (l.ok) {
+          const dl = await l.json();
+          chatsList = (dl && dl.ok) ? dl.chats || [] : [];
+        }
+        historyItems.slice(-20).forEach(it => {
           appendItem(it.text, it.who === 'user' ? 'user' : 'bot');
         });
+        renderHistory();
       } catch (e) {}
     }
 
@@ -289,6 +385,31 @@
       input.value = cmd;
       sendBtn.click();
     });
+    // Sidebar controls
+    const layoutEl = document.getElementById('layout');
+    const toggleSide = document.getElementById('toggleSide');
+    const expandSide = document.getElementById('expandSide');
+    const newChatBtn = document.getElementById('newChat');
+    const clearChatBtn = document.getElementById('clearChat');
+    let collapsed = false; let expanded = false;
+    toggleSide.onclick = () => {
+      collapsed = !collapsed;
+      layoutEl.classList.toggle('collapsed', collapsed);
+      toggleSide.textContent = collapsed ? 'Show Sidebar' : 'Hide Sidebar';
+    };
+    expandSide.onclick = () => {
+      expanded = !expanded;
+      layoutEl.classList.toggle('expanded', expanded);
+      expandSide.textContent = expanded ? 'Shrink' : 'Expand';
+    };
+    newChatBtn.onclick = async () => {
+      try { await fetch('/api/chats/new', { method:'POST' }); await loadHistory(); } catch (e) {}
+    };
+    clearChatBtn.onclick = async () => {
+      try { await fetch('/api/chats/clear', { method:'POST' }); historyItems = []; renderHistory(); } catch (e) {}
+    };
+    // Update sidebar in guest mode too
+    renderProfile();
   </script>
 </body>
 </html>
