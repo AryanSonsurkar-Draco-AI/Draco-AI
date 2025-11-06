@@ -976,15 +976,25 @@ def process_command(raw_cmd: str) -> str:
 # ------------- Flask / SocketIO endpoints -------------
 @app.route("/")
 def index():
-    # If logged in → show main app
-    if get_logged_in_email():
+    user_email = get_logged_in_email()
+    if user_email:
+        # Logged in → show main app
         return send_from_directory(".", "draco.html")
-    # Otherwise → open in guest mode
-    return send_from_directory(".", "draco.html")
+    else:
+        # Not logged in → show login page
+        return redirect(url_for("login_page"))
+
 
 @app.route("/login")
 def login_page():
     return send_from_directory(".", "login.html")
+
+
+@app.route("/guest")
+def guest_mode():
+    # Open chat in guest mode
+    return send_from_directory(".", "draco.html")
+
 
 @app.route("/logout")
 def logout_page():
