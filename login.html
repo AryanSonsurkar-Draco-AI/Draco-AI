@@ -110,122 +110,70 @@
     </div>
   </div>
 
-  <script>
-    const emailEl = document.getElementById('email');
-    const sendCodeBtn = document.getElementById('sendCodeBtn');
-    const codeArea = document.getElementById('codeArea');
-    const codeEl = document.getElementById('code');
-    const verifyBtn = document.getElementById('verifyBtn');
-    const note = document.getElementById('note');
-    const googleBtn = document.getElementById('googleBtn');
-    const microsoftBtn = document.getElementById('microsoftBtn');
-    const guestBtn = document.getElementById('guestBtn');
-    const clearAll = document.getElementById('clearAll');
+  <script type="module">
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-    // Provider sections
-    const provGoogle = document.getElementById('provGoogle');
-    const provMS = document.getElementById('provMS');
-    const emailG = document.getElementById('emailG');
-    const sendG = document.getElementById('sendG');
-    const cancelG = document.getElementById('cancelG');
-    const codeAreaG = document.getElementById('codeAreaG');
-    const codeG = document.getElementById('codeG');
-    const verifyG = document.getElementById('verifyG');
-    const resendG = document.getElementById('resendG');
-    const emailM = document.getElementById('emailM');
-    const sendM = document.getElementById('sendM');
-    const cancelM = document.getElementById('cancelM');
-    const codeAreaM = document.getElementById('codeAreaM');
-    const codeM = document.getElementById('codeM');
-    const verifyM = document.getElementById('verifyM');
-    const resendM = document.getElementById('resendM');
+  // 🔹 Replace these with your actual Supabase project values
+  const supabaseUrl = 'https://shrfeykkhsoklcpnnghi.supabase.co'
+  const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNocmZleWtraHNva2xjcG5uZ2hpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1OTc4MDgsImV4cCI6MjA3ODE3MzgwOH0.UJHPrkAOqy50LCGosvAlWvE4A2iD01dTwtKoQ6lRzz8'
+  const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-    function msg(t, ok=false){ note.textContent=t; note.className = 'note ' + (ok? 'ok':'err'); }
+  const emailEl = document.getElementById('email')
+  const sendCodeBtn = document.getElementById('sendCodeBtn')
+  const codeArea = document.getElementById('codeArea')
+  const codeEl = document.getElementById('code')
+  const verifyBtn = document.getElementById('verifyBtn')
+  const note = document.getElementById('note')
 
-    function hideProviders(){ provGoogle.classList.remove('show'); provMS.classList.remove('show'); }
-    googleBtn.onclick = () => { hideProviders(); provGoogle.classList.add('show'); emailG.focus(); };
-    microsoftBtn.onclick = () => { hideProviders(); provMS.classList.add('show'); emailM.focus(); };
-    guestBtn.onclick = () => { window.location.href = '/guest'; };
-    clearAll.onclick = () => { emailEl.value=''; codeEl.value=''; codeArea.style.display='none'; msg(''); }
+  function msg(t, ok = false) {
+    note.textContent = t
+    note.className = 'note ' + (ok ? 'ok' : 'err')
+  }
 
-    const msDomains = ['@outlook.com','@hotmail.com','@live.com','@msn.com','@microsoft.com'];
-    function isValidGoogleEmail(e){ return /@gmail\.com$/i.test(e); }
-    function isValidMsEmail(e){ return msDomains.some(d => e.toLowerCase().endsWith(d)); }
+  // 🔹 Step 2: Sign Up (send verification email)
+  sendCodeBtn.onclick = async () => {
+    const email = (emailEl.value || '').trim().toLowerCase()
+    if (!email || !email.includes('@')) {
+      msg('Please enter a valid email.')
+      return
+    }
 
-    sendCodeBtn.onclick = async () => {
-      const email = (emailEl.value||'').trim().toLowerCase();
-      if(!email || !email.includes('@')){ msg('Please enter a valid email.'); return; }
-      try{
-        const r = await fetch('/auth/email/start', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email}) });
-        const d = await r.json();
-        if(!d.ok){ msg('Failed to send code: ' + (d.error||'unknown')); return; }
-        codeArea.style.display = '';
-        msg('Code sent. Check your email. (Also printed in server logs for local dev.)', true);
-      }catch(e){ msg('Request failed.'); }
-    };
+    const password = crypto.randomUUID().slice(0, 12) // temporary random password
+    const { error } = await supabase.auth.signUp({ email, password })
+    if (error) {
+      msg('Failed to send verification: ' + error.message)
+    } else {
+      msg('Verification email sent! Check your inbox.', true)
+      codeArea.style.display = ''
+    }
+  }
 
-    verifyBtn.onclick = async () => {
-      const email = (emailEl.value||'').trim().toLowerCase();
-      const code = (codeEl.value||'').trim();
-      if(!email || !code){ msg('Enter email and code.'); return; }
-      try{
-        const r = await fetch('/auth/email/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, code}) });
-        const d = await r.json();
-        if(!d.ok){ msg('Verification failed: ' + (d.error||'unknown')); codeEl.value=''; return; }
-        window.location.href = '/';
-      }catch(e){ msg('Request failed.'); }
-    };
+  // 🔹 Step 3: Login (after user verified)
+  verifyBtn.onclick = async () => {
+    const email = (emailEl.value || '').trim().toLowerCase()
+    const password = crypto.randomUUID().slice(0, 12) // reuse a generated password if needed
+    if (!email) {
+      msg('Enter your verified email.')
+      return
+    }
 
-    // Google flow
-    cancelG.onclick = () => { provGoogle.classList.remove('show'); };
-    resendG.onclick = async () => sendG.click();
-    sendG.onclick = async () => {
-      const email = (emailG.value||'').trim().toLowerCase();
-      if(!isValidGoogleEmail(email)){ msg('Use a valid Gmail address (ends with @gmail.com).'); return; }
-      try{
-        const r = await fetch('/auth/email/start', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email}) });
-        const d = await r.json();
-        if(!d.ok){ msg('Failed to send code: ' + (d.error||'unknown')); return; }
-        codeAreaG.style.display=''; msg('Gmail code sent. Check your inbox.', true);
-      }catch(e){ msg('Request failed.'); }
-    };
-    verifyG.onclick = async () => {
-      const email = (emailG.value||'').trim().toLowerCase();
-      const code = (codeG.value||'').trim();
-      if(!email || !code){ msg('Enter Gmail and code.'); return; }
-      try{
-        const r = await fetch('/auth/email/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, code}) });
-        const d = await r.json();
-        if(!d.ok){ msg('Wrong code. Resending recommended.'); codeG.value=''; return; }
-        window.location.href = '/';
-      }catch(e){ msg('Request failed.'); }
-    };
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) {
+      msg('Please verify your email before logging in.')
+      return
+    }
 
-    // Microsoft flow
-    cancelM.onclick = () => { provMS.classList.remove('show'); };
-    resendM.onclick = async () => sendM.click();
-    sendM.onclick = async () => {
-      const email = (emailM.value||'').trim().toLowerCase();
-      if(!isValidMsEmail(email)){ msg('Use a Microsoft address (e.g., @outlook.com, @hotmail.com).'); return; }
-      try{
-        const r = await fetch('/auth/email/start', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email}) });
-        const d = await r.json();
-        if(!d.ok){ msg('Failed to send code: ' + (d.error||'unknown')); return; }
-        codeAreaM.style.display=''; msg('Code sent to your Microsoft email.', true);
-      }catch(e){ msg('Request failed.'); }
-    };
-    verifyM.onclick = async () => {
-      const email = (emailM.value||'').trim().toLowerCase();
-      const code = (codeM.value||'').trim();
-      if(!email || !code){ msg('Enter email and code.'); return; }
-      try{
-        const r = await fetch('/auth/email/verify', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, code}) });
-        const d = await r.json();
-        if(!d.ok){ msg('Wrong code. Try again or resend.'); codeM.value=''; return; }
-        window.location.href = '/';
-      }catch(e){ msg('Request failed.'); }
-    };
-  </script>
+    const token = (await supabase.auth.getSession()).data.session?.access_token
+    localStorage.setItem('supabase_token', token)
+    msg('Login successful! Redirecting...', true)
+    setTimeout(() => (window.location.href = '/'), 1000)
+  }
+
+  // Optional: guest mode
+  document.getElementById('guestBtn').onclick = () => {
+    window.location.href = 'draco.html'
+  }
+</script>
 </body>
 </html>
 
