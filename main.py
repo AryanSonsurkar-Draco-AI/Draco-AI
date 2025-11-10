@@ -671,7 +671,12 @@ def process_command(raw_cmd: str) -> str:
         reply = personality.respond("I'm good — ready to help you.")
         speak(reply)
         return reply
-
+    
+    if "who are you" in cmd:
+        reply = "I am Draco AI made by Aryan and his co-workers which are kaustubh and ritesh"
+        speak(reply)
+        return reply
+    
     # time/date
     if "time" in cmd and "what" in cmd or cmd == "time":
         t = datetime.datetime.now().strftime("%I:%M %p")
@@ -808,7 +813,7 @@ def process_command(raw_cmd: str) -> str:
             subprocess.run(["reboot"])
         return "Restart initiated."
 
-    if "lock pc" in cmd or "lock" == cmd:
+    if "lock device" in cmd or "lock" == cmd:
         if platform.system() == "Windows":
             subprocess.run(["rundll32.exe", "user32.dll,LockWorkStation"])
             return "Locked PC."
@@ -942,6 +947,10 @@ def process_command(raw_cmd: str) -> str:
             "Why do programmers prefer dark mode? Because light attracts bugs!",
             "I told my computer I needed a break, and it said 'No problem — I'll go to sleep.'",
             "There are only 10 kinds of people in the world: those who understand binary and those who don't.",
+            "Rishte mai hum tumhare baap lagte hai !!!",
+            "Kaun Bhauk raha hai ye batameez",
+            "What if a girl propose you,In your dreams ! HAHAHAHAHA!!!",
+            "Pahili furr sat se nikal , Joke sunna hai tuze, Mai aajaau kya udhar !!!"
         ]
         reply = random.choice(jokes)
         speak(reply)
