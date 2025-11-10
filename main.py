@@ -947,10 +947,10 @@ def process_command(raw_cmd: str) -> str:
             "Why do programmers prefer dark mode? Because light attracts bugs!",
             "I told my computer I needed a break, and it said 'No problem — I'll go to sleep.'",
             "There are only 10 kinds of people in the world: those who understand binary and those who don't.",
-            "Rishte mai hum tumhare baap lagte hai !!!",
-            "Kaun Bhauk raha hai ye batameez",
-            "What if a girl propose you,In your dreams ! HAHAHAHAHA!!!",
-            "Pahili furr sat se nikal , Joke sunna hai tuze, Mai aajaau kya udhar !!!"
+            "Rishte mai hum tumhare baap lagte hai.",
+            "Kaun bhauk raha hai , ye bata-meez.",
+            "What if a girl propose you? In your dreams. ha ha ha ha ha ha.",
+            "Pahili furr, sat se nikal . Joke sunna hai tuze? Mai aajaau kya udhar."
         ]
         reply = random.choice(jokes)
         speak(reply)
