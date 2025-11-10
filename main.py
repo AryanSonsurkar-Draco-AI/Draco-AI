@@ -22,6 +22,10 @@ from flask import session
 from flask import Flask, send_from_directory, request, session, redirect, url_for, jsonify
 from flask_socketio import SocketIO, emit
 import requests
+try:
+    from docx import Document
+except Exception:
+    Document = None
 
 # optional imports (best-effort)
 try:
@@ -963,6 +967,23 @@ def process_command(raw_cmd: str) -> str:
         else:
             return "News feature needs an API key. Add it to NEWSAPI_KEY."
 
+    # research and doc generation
+    if cmd.startswith("research ") or cmd.startswith("search topic "):
+        topic = cmd.replace("research ", "", 1).replace("search topic ", "", 1).strip()
+        if not topic:
+            return "Please provide a topic. Example: research quantum computing basics"
+        items = research_query_to_texts(topic, limit=6)
+        # try to generate docx
+        path, err = save_docx_from_texts(topic, items)
+        if path:
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            speak("I compiled a short brief and created a document for you.")
+            return {"text": f"Research summary ready. Download: {url}", "action": "open_url", "url": url}
+        else:
+            speak("Here is a quick summary I found.")
+            return " • " + "\n • ".join(items[:6])
+
     # run shell command (explicit phrase: run)
     if cmd.startswith("run "):
         to_run = cmd.replace("run ", "", 1)
@@ -1129,6 +1150,71 @@ def api_supabase_login():
         pass
 
     return {"ok": True, "email": email}
+
+# ------------- Research & DOCX export -------------
+GENERATED_DIR = os.path.join(os.getcwd(), "generated")
+ensure_dir(GENERATED_DIR)
+
+def research_query_to_texts(query: str, limit: int = 6):
+    text = web_search_duckduckgo(query, limit=limit)
+    if isinstance(text, str):
+        parts = [p.strip() for p in text.split("|") if p.strip()]
+        return parts[:limit] if parts else [text]
+    return [str(text)]
+
+def save_docx_from_texts(title: str, bullets):
+    if not Document:
+        return None, "python-docx not installed."
+    try:
+        doc = Document()
+        doc.add_heading(title.strip() or "Research", level=1)
+        doc.add_paragraph("")
+        for b in bullets:
+            doc.add_paragraph(b.strip(), style=None)
+        safe_name = "".join(ch for ch in title if ch.isalnum() or ch in (" ", "_", "-")).strip() or "research"
+        filename = f"{safe_name[:40].replace(' ', '_')}_{int(time.time())}.docx"
+        path = os.path.join(GENERATED_DIR, filename)
+        doc.save(path)
+        return path, None
+    except Exception as e:
+        return None, str(e)
+
+@app.route("/api/research", methods=["POST"])
+def api_research():
+    """
+    Body: { "query": "topic", "make_doc": true/false }
+    Returns summaries and optional doc download path.
+    """
+    data = request.json or {}
+    query = (data.get("query") or "").strip()
+    make_doc = bool(data.get("make_doc"))
+    if not query:
+        return {"ok": False, "error": "missing_query"}, 400
+
+    items = research_query_to_texts(query, limit=6)
+    out = {"ok": True, "items": items}
+    if make_doc:
+        path, err = save_docx_from_texts(query, items)
+        if path:
+            # Provide relative path for download (served by Flask send_from_directory if needed)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            out["doc"] = f"/download/{rel}"
+        else:
+            out["doc_error"] = err or "failed_to_write_doc"
+    return out
+
+@app.route("/download/<path:filepath>", methods=["GET"])
+def download_generated(filepath):
+    # Only allow files inside GENERATED_DIR
+    abs_path = os.path.abspath(os.path.join(os.getcwd(), filepath))
+    if not abs_path.startswith(os.path.abspath(GENERATED_DIR)):
+        return {"ok": False, "error": "forbidden"}, 403
+    try:
+        directory = os.path.dirname(abs_path)
+        filename = os.path.basename(abs_path)
+        return send_from_directory(directory, filename, as_attachment=True)
+    except Exception as e:
+        return {"ok": False, "error": str(e)}, 404
 
 def _email_codes():
     return safe_read_json(EMAIL_CODES_FILE, {})
