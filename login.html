@@ -130,7 +130,27 @@
     note.className = 'note ' + (ok ? 'ok' : 'err')
   }
 
-  // 🔹 Step 2: Sign Up (send verification email)
+  // If user already has a Supabase session (e.g., returned from magic link), exchange it with backend and go in
+  (async () => {
+    const { data } = await supabase.auth.getSession()
+    const token = data.session?.access_token
+    if (token) {
+      try {
+        const r = await fetch('/api/supabase_login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ access_token: token }),
+        })
+        const j = await r.json()
+        if (j?.ok) {
+          window.location.href = '/'
+          return
+        }
+      } catch {}
+    }
+  })()
+
+  // 🔹 Step 1: Send OTP to email via Supabase
   sendCodeBtn.onclick = async () => {
     const email = (emailEl.value || '').trim().toLowerCase()
     if (!email || !email.includes('@')) {
@@ -138,35 +158,56 @@
       return
     }
 
-    const password = crypto.randomUUID().slice(0, 12) // temporary random password
-    const { error } = await supabase.auth.signUp({ email, password })
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: window.location.origin + '/login',
+      },
+    })
     if (error) {
-      msg('Failed to send verification: ' + error.message)
+      msg('Failed to send verification code: ' + error.message)
     } else {
-      msg('Verification email sent! Check your inbox.', true)
+      msg('Verification code sent! Check your inbox.', true)
       codeArea.style.display = ''
     }
   }
 
-  // 🔹 Step 3: Login (after user verified)
+  // 🔹 Step 2: Verify OTP code from email, establish backend session, redirect
   verifyBtn.onclick = async () => {
     const email = (emailEl.value || '').trim().toLowerCase()
-    const password = crypto.randomUUID().slice(0, 12) // reuse a generated password if needed
-    if (!email) {
-      msg('Enter your verified email.')
+    const token = (codeEl.value || '').trim()
+    if (!email || !token || token.length < 4) {
+      msg('Enter your email and the 6-digit code.')
       return
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-    if (error) {
-      msg('Please verify your email before logging in.')
+    const { data, error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'email', // email OTP
+    })
+    if (error || !data?.session?.access_token) {
+      msg('Invalid or expired code. Try resending.')
       return
     }
 
-    const token = (await supabase.auth.getSession()).data.session?.access_token
-    localStorage.setItem('supabase_token', token)
-    msg('Login successful! Redirecting...', true)
-    setTimeout(() => (window.location.href = '/'), 1000)
+    try {
+      const r = await fetch('/api/supabase_login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ access_token: data.session.access_token }),
+      })
+      const j = await r.json()
+      if (j?.ok) {
+        msg('Login successful! Redirecting...', true)
+        setTimeout(() => (window.location.href = '/'), 600)
+      } else {
+        msg('Server login failed. Please try again.')
+      }
+    } catch (e) {
+      msg('Network error. Please try again.')
+    }
   }
 
   // Optional: guest mode

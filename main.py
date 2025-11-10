@@ -21,6 +21,7 @@ from typing import Optional
 from flask import session
 from flask import Flask, send_from_directory, request, session, redirect, url_for, jsonify
 from flask_socketio import SocketIO, emit
+import requests
 
 # optional imports (best-effort)
 try:
@@ -81,6 +82,8 @@ WEATHER_API_KEY = ""   # add your OpenWeatherMap key if desired
 NEWSAPI_KEY = ""       # add your News API key if desired
 USERS_DIR = os.path.join(os.getcwd(), "users")
 EMAIL_CODES_FILE = os.path.join(os.getcwd(), "email_codes.json")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://shrfeykkhsoklcpnnghi.supabase.co")
+SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNocmZleWtraHNva2xjcG5uZ2hpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1OTc4MDgsImV4cCI6MjA3ODE3MzgwOH0.UJHPrkAOqy50LCGosvAlWvE4A2iD01dTwtKoQ6lRzz8")
 
 def safe_write_json(path, data):
     with open(path, "w", encoding="utf-8") as f:
@@ -1077,6 +1080,55 @@ def api_chats_clear():
         return {"ok": False, "error": "not_authenticated"}, 401
     ok = _clear_current_chat(email)
     return {"ok": ok}
+
+def _supabase_get_user_from_token(access_token: str):
+    """
+    Verify Supabase access token by calling the /auth/v1/user endpoint.
+    Returns dict user or None.
+    """
+    if not access_token or not isinstance(access_token, str):
+        return None
+    try:
+        url = f"{SUPABASE_URL}/auth/v1/user"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "apikey": SUPABASE_ANON_KEY,
+        }
+        resp = requests.get(url, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            return resp.json()
+        return None
+    except Exception:
+        return None
+
+@app.route("/api/supabase_login", methods=["POST"])
+def api_supabase_login():
+    """
+    Exchange a Supabase access token for a server-side session.
+    Expects JSON: { "access_token": "..." }
+    """
+    data = request.json or {}
+    access_token = data.get("access_token")
+    user = _supabase_get_user_from_token(access_token)
+    if not user:
+        return {"ok": False, "error": "invalid_token"}, 401
+    email = user.get("email")
+    if not email or "@" not in email:
+        return {"ok": False, "error": "no_email"}, 400
+
+    # Establish Flask session
+    session["user_email"] = email
+    # Ensure user dirs/profile exist
+    try:
+        _ = user_paths(email)
+        prof = get_user_profile(email) or {}
+        if not prof.get("email"):
+            prof["email"] = email
+        set_user_profile(email, prof)
+    except Exception:
+        pass
+
+    return {"ok": True, "email": email}
 
 def _email_codes():
     return safe_read_json(EMAIL_CODES_FILE, {})
