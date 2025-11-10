@@ -3,8 +3,6 @@
 # Save next to draco.html and run: python main.py
 # Required packages (example):
 # pip install flask flask-socketio pyttsx3 pygame SpeechRecognition ddgs psutil pyautogui pywhatkit
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
 import os
 import sys
 import time
@@ -21,7 +19,6 @@ from typing import Optional
 from flask import session
 from flask import Flask, send_from_directory, request, session, redirect, url_for, jsonify
 from flask_socketio import SocketIO, emit
-import requests
 try:
     from docx import Document
 except Exception:
@@ -85,9 +82,7 @@ REMINDERS_FILE = "reminders.json"
 WEATHER_API_KEY = ""   # add your OpenWeatherMap key if desired
 NEWSAPI_KEY = ""       # add your News API key if desired
 USERS_DIR = os.path.join(os.getcwd(), "users")
-EMAIL_CODES_FILE = os.path.join(os.getcwd(), "email_codes.json")
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "https://shrfeykkhsoklcpnnghi.supabase.co")
-SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNocmZleWtraHNva2xjcG5uZ2hpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI1OTc4MDgsImV4cCI6MjA3ODE3MzgwOH0.UJHPrkAOqy50LCGosvAlWvE4A2iD01dTwtKoQ6lRzz8")
+
 
 def safe_write_json(path, data):
     with open(path, "w", encoding="utf-8") as f:
@@ -1001,30 +996,14 @@ def process_command(raw_cmd: str) -> str:
 # ------------- Flask / SocketIO endpoints -------------
 @app.route("/")
 def index():
-    user_email = get_logged_in_email()
-    if user_email:
-        # Logged in → show main app
-        return send_from_directory(".", "draco.html")
-    else:
-        # Not logged in → show login page
-        return redirect(url_for("login_page"))
-
-
-@app.route("/login")
-def login_page():
-    return send_from_directory(".", "login.html")
+    # Always show main app; login removed
+    return send_from_directory(".", "draco.html")
 
 
 @app.route("/guest")
 def guest_mode():
-    # Open chat in guest mode
+    # Guest mode (login removed) – just serve app
     return send_from_directory(".", "draco.html")
-
-
-@app.route("/logout")
-def logout_page():
-    session.clear()
-    return redirect(url_for("login_page"))
 
 @app.route("/me")
 def me():
@@ -1102,54 +1081,7 @@ def api_chats_clear():
     ok = _clear_current_chat(email)
     return {"ok": ok}
 
-def _supabase_get_user_from_token(access_token: str):
-    """
-    Verify Supabase access token by calling the /auth/v1/user endpoint.
-    Returns dict user or None.
-    """
-    if not access_token or not isinstance(access_token, str):
-        return None
-    try:
-        url = f"{SUPABASE_URL}/auth/v1/user"
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "apikey": SUPABASE_ANON_KEY,
-        }
-        resp = requests.get(url, headers=headers, timeout=10)
-        if resp.status_code == 200:
-            return resp.json()
-        return None
-    except Exception:
-        return None
 
-@app.route("/api/supabase_login", methods=["POST"])
-def api_supabase_login():
-    """
-    Exchange a Supabase access token for a server-side session.
-    Expects JSON: { "access_token": "..." }
-    """
-    data = request.json or {}
-    access_token = data.get("access_token")
-    user = _supabase_get_user_from_token(access_token)
-    if not user:
-        return {"ok": False, "error": "invalid_token"}, 401
-    email = user.get("email")
-    if not email or "@" not in email:
-        return {"ok": False, "error": "no_email"}, 400
-
-    # Establish Flask session
-    session["user_email"] = email
-    # Ensure user dirs/profile exist
-    try:
-        _ = user_paths(email)
-        prof = get_user_profile(email) or {}
-        if not prof.get("email"):
-            prof["email"] = email
-        set_user_profile(email, prof)
-    except Exception:
-        pass
-
-    return {"ok": True, "email": email}
 
 # ------------- Research & DOCX export -------------
 GENERATED_DIR = os.path.join(os.getcwd(), "generated")
@@ -1216,71 +1148,7 @@ def download_generated(filepath):
     except Exception as e:
         return {"ok": False, "error": str(e)}, 404
 
-def _email_codes():
-    return safe_read_json(EMAIL_CODES_FILE, {})
 
-def _save_email_codes(d):
-    safe_write_json(EMAIL_CODES_FILE, d)
-
-def generate_verification_code(length=6):
-    return ''.join(str(random.randint(0, 9)) for _ in range(length))
-
-def send_verification_email(to_email, code):
-    message = Mail(
-        from_email='aryansonsurkar87@example.com',  # must be verified in SendGrid
-        to_emails=to_email,
-        subject='Your Draco Verification Code',
-        html_content=f"<p>Your verification code is: <b>{code}</b></p>"
-    )
-    try:
-        sg = SendGridAPIClient(os.environ.get("SENDGRID_API_KEY"))
-        response = sg.send(message)
-        print(f"Email sent! Status code: {response.status_code}")
-        return True
-    except Exception as e:
-        print(f"Error sending email: {e}")
-        return False
-
-@app.route("/api/send_verification", methods=["POST"])
-def send_verification():
-    data = request.json or {}
-    to_email = data.get("email")
-    if not to_email:
-        return {"ok": False, "error": "Missing recipient email"}, 400
-
-    code = generate_verification_code()
-    success = send_verification_email(to_email, code)
-    if success:
-        # Save code in session temporarily
-        session["verification_code"] = code
-        session["verification_email"] = to_email
-        return {"ok": True, "message": "Verification code sent!"}
-    return {"ok": False, "error": "Failed to send email"}, 500
-
-@app.route("/api/verify_code", methods=["POST"])
-def verify_code():
-    data = request.json or {}
-    code = data.get("code")
-    email = data.get("email")
-    if not code or not email:
-        return {"ok": False, "error": "Missing fields"}, 400
-
-    if session.get("verification_email") == email and session.get("verification_code") == code:
-        session.pop("verification_code", None)
-        session.pop("verification_email", None)
-        return {"ok": True, "message": "Verified!"}
-
-    return {"ok": False, "error": "Invalid code"}, 401
-
-@app.route("/auth/google")
-def auth_google_start():
-    # Placeholder: requires OAuth client setup. Redirect to login with message if not configured.
-    return redirect(url_for("login_page"))
-
-@app.route("/auth/microsoft")
-def auth_microsoft_start():
-    # Placeholder: requires OAuth client setup. Redirect to login with message if not configured.
-    return redirect(url_for("login_page"))
 
 @app.route("/api/echo", methods=["POST"])
 def api_echo():
