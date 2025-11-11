@@ -814,7 +814,7 @@ def process_command(raw_cmd: str) -> str:
         reply = personality.respond("I'm good — ready to help you.")
         speak(reply)
         return reply
-    
+
     if "who are you" in cmd:
         reply = "I am Draco AI made by Aryan and his co-workers which are kaustubh and ritesh."
         speak(reply)
@@ -885,7 +885,7 @@ def process_command(raw_cmd: str) -> str:
         result = convert_unit(cmd)
         speak(result)
         return result
-    
+
     # whatsapp send (phrase: send whatsapp to 919xxxxxxxxx message hi)
     if "whatsapp" in cmd and "send" in cmd:
         # naive parse: "send whatsapp to 919xxxxxxxxx msg hello there"
@@ -1209,7 +1209,7 @@ def process_command(raw_cmd: str) -> str:
 @app.route("/")
 def index():
     # Always show main app; login removed
-    return send_from_directory(".", "draco.html")
+        return send_from_directory(".", "draco.html")
 
 
 @app.route("/guest")
