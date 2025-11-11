@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>Draco Assistant</title>
   <style>
     :root {
@@ -29,6 +29,10 @@
     .row { display: flex; gap: 10px; }
     .input { display:flex; gap:10px; align-items:center; padding:10px; border-radius: 12px; border:1px solid var(--line); background:#151236; }
     input[type=text] { flex: 1; padding: 12px; border-radius: 10px; border: none; outline: none; background: transparent; color: var(--text); font-size: 15px; }
+    /* Ensure file input stays within sidebar width */
+    input[type=file].input { display:block; width:100%; padding:10px; background:#151236; border:1px solid var(--line); border-radius:10px; color:var(--text); }
+    input[type=file].input::file-selector-button { background: var(--accent); color:#fff; border:none; padding:8px 10px; border-radius:8px; margin-right:10px; cursor:pointer; }
+    input[type=file].input::-webkit-file-upload-button { background: var(--accent); color:#fff; border:none; padding:8px 10px; border-radius:8px; margin-right:10px; cursor:pointer; }
     .btn { padding: 12px 14px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; transition: transform .08s ease, box-shadow .15s ease, filter .15s ease; }
     .btn:hover { filter: brightness(.95); transform: translateY(-1px); }
     .btn:disabled { opacity:.55; cursor:not-allowed; filter: grayscale(.3); }
@@ -42,9 +46,10 @@
     small { color:var(--muted); }
     /* layout: sidebar + main */
     .layout { display:grid; grid-template-columns: 290px 1fr; gap:14px; }
-    .side { background: var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; }
+    .side { background: var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; overflow:auto; }
     .profile { display:flex; align-items:center; gap:10px; padding:8px; border-bottom:1px solid rgba(111,141,255,.18); }
-    .avatar { width:36px; height:36px; border-radius:50%; background:#2a245b; display:grid; place-items:center; color:#eae4ff; border:1px solid var(--line); }
+    .avatar { width:72px; height:72px; border-radius:12px; background:#2a245b; display:grid; place-items:center; color:#eae4ff; border:1px solid var(--line); overflow:hidden; flex-shrink:0; }
+    .avatar img { width:100%; height:100%; object-fit:contain; display:block; padding:6px; }
     .meta small { color:var(--muted); display:block; }
     .history { margin-top:12px; max-height: 520px; overflow:auto; }
     .hitem { padding:8px 10px; border-radius:10px; border:1px solid var(--line); margin:8px 0; color:#d9d3ff; background:#151236; cursor:pointer; }
@@ -66,17 +71,34 @@
     <div class="layout" id="layout">
       <div class="side" id="sidebar">
         <div class="profile">
-          <div class="avatar" id="avatar">U</div>
+          <div class="avatar" id="avatar">
+            <img id="dracoLogo" src="/static/draco-logo.png" alt="Draco Logo" />
+          </div>
           <div class="meta">
-            <div id="profName">Guest</div>
-            <small id="profEmail">Not signed in</small>
+            <div id="profName">Draco AI</div>
+            <small id="profEmail">Powered by Aryan and his co-workers</small>
           </div>
         </div>
-        <div class="sideActions">
-          <button class="btn" id="newChat">New Chat</button>
-          <button class="btn" id="clearChat">Clear</button>
+        <div class="card" style="margin-top:10px;">
+          <div style="font-weight:600; margin-bottom:6px;">Generate Files</div>
+          <div class="row" style="flex-direction:column; gap:8px;">
+            <input id="genTopicSide" type="text" class="input" placeholder="Topic (e.g., Quantum Computing)" />
+            <button class="btn" id="genPPTSide" style="width:100%;">Generate PPT</button>
+            <button class="btn" id="genDOCSide" style="width:100%;">Generate DOC</button>
+            <button class="btn" id="genPDFSide" style="width:100%;">Generate PDF</button>
+          </div>
         </div>
         <div class="history" id="history"></div>
+        <div class="card" style="margin-top:12px;">
+          <div style="font-weight:600; margin-bottom:6px;">Upload & Process File</div>
+          <input id="fileInput" type="file" accept=".pdf,.pptx,.docx" class="input" />
+          <label for="instruction" style="margin-top:8px;">Instruction (e.g., summarize):</label>
+          <input id="instruction" type="text" class="input" placeholder="summarize, shorten, etc." />
+          <div class="row" style="margin-top:10px;">
+            <button class="btn" id="uploadBtn">Upload & Process</button>
+          </div>
+          <div id="uploadNote" style="margin-top:8px; color:var(--muted); font-size:13px;"></div>
+        </div>
       </div>
       <div class="card">
         <div class="input" style="margin-bottom:10px;">
@@ -138,13 +160,11 @@
     }
 
     function renderProfile() {
+      // Static branding
       const profName = document.getElementById('profName');
       const profEmail = document.getElementById('profEmail');
-      const avatar = document.getElementById('avatar');
-      const name = (user.profile && user.profile.name) ? user.profile.name : (user.logged_in ? 'You' : 'Guest');
-      profName.textContent = name;
-      profEmail.textContent = user.logged_in ? (user.email||'') : 'Not signed in';
-      avatar.textContent = initials(name);
+      if (profName) profName.textContent = 'Draco AI';
+      if (profEmail) profEmail.textContent = 'Powered by Aryan and his co-workers';
     }
 
     function renderHistory() {
@@ -386,8 +406,6 @@
     const layoutEl = document.getElementById('layout');
     const toggleSide = document.getElementById('toggleSide');
     const expandSide = document.getElementById('expandSide');
-    const newChatBtn = document.getElementById('newChat');
-    const clearChatBtn = document.getElementById('clearChat');
     let collapsed = false; let expanded = false;
     toggleSide.onclick = () => {
       collapsed = !collapsed;
@@ -399,14 +417,59 @@
       layoutEl.classList.toggle('expanded', expanded);
       expandSide.textContent = expanded ? 'Shrink' : 'Expand';
     };
-    newChatBtn.onclick = async () => {
-      try { await fetch('/api/chats/new', { method:'POST' }); await loadHistory(); } catch (e) {}
-    };
-    clearChatBtn.onclick = async () => {
-      try { await fetch('/api/chats/clear', { method:'POST' }); historyItems = []; renderHistory(); } catch (e) {}
-    };
+    // Removed New Chat / Clear buttons per request
     // Update sidebar in guest mode too
     renderProfile();
+
+    // Upload & Process
+    const fileInput = document.getElementById('fileInput');
+    const instructionEl = document.getElementById('instruction');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const uploadNote = document.getElementById('uploadNote');
+    uploadBtn.onclick = async () => {
+      uploadNote.textContent = 'Processing...';
+      const f = fileInput.files && fileInput.files[0];
+      if (!f) { uploadNote.textContent = 'Please choose a file.'; return; }
+      const fd = new FormData();
+      fd.append('file', f);
+      fd.append('instruction', (instructionEl.value||'').trim());
+      try {
+        const r = await fetch('/api/upload_process', { method:'POST', body: fd });
+        const j = await r.json();
+        if (!j.ok) { uploadNote.textContent = 'Error: ' + (j.error||'failed'); return; }
+        let msg = '';
+        if (j.summary) msg += 'Summary:\n' + j.summary + '\n';
+        if (j.text) msg += 'Text:\n' + j.text + '\n';
+        appendItem(msg || 'Processed.', 'bot');
+        if (j.doc) {
+          const a = document.createElement('a');
+          a.href = j.doc;
+          a.target = '_blank';
+          a.textContent = 'Download processed file';
+          uploadNote.innerHTML = '';
+          uploadNote.appendChild(a);
+        } else {
+          uploadNote.textContent = 'Done.';
+        }
+      } catch (e) {
+        uploadNote.textContent = 'Upload failed.';
+      }
+    };
+
+    // Generate Files (Sidebar only)
+    const genTopicSide = document.getElementById('genTopicSide');
+    document.getElementById('genPPTSide').onclick = () => {
+      const t = (genTopicSide.value||'').trim(); if (!t) return;
+      sendCommand('generate ppt on ' + t);
+    };
+    document.getElementById('genDOCSide').onclick = () => {
+      const t = (genTopicSide.value||'').trim(); if (!t) return;
+      sendCommand('generate doc on ' + t);
+    };
+    document.getElementById('genPDFSide').onclick = () => {
+      const t = (genTopicSide.value||'').trim(); if (!t) return;
+      sendCommand('generate pdf on ' + t);
+    };
   </script>
 </body>
 </html>

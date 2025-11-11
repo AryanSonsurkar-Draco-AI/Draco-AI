@@ -19,11 +19,24 @@ from typing import Optional
 from flask import session
 from flask import Flask, send_from_directory, request, session, redirect, url_for, jsonify
 from flask_socketio import SocketIO, emit
+from werkzeug.utils import secure_filename
 try:
     from docx import Document
 except Exception:
     Document = None
-
+try:
+    from pptx import Presentation
+except Exception:
+    Presentation = None
+try:
+    from fpdf import FPDF
+except Exception:
+    FPDF = None
+try:
+    from PyPDF2 import PdfReader
+except Exception:
+    PdfReader = None
+import sympy as sp
 # optional imports (best-effort)
 try:
     import pyttsx3
@@ -64,6 +77,8 @@ try:
     import musicLibrary
 except Exception:
     musicLibrary = None
+import requests
+import pytz
 
 ON_RENDER = os.environ.get("RENDER") is not None
 ON_SERVER = ON_RENDER or (os.environ.get("PORT") is not None) or (os.environ.get("RENDER_EXTERNAL_URL") is not None)
@@ -617,6 +632,134 @@ def whatsapp_send_direct(phone: str, message: str):
     except Exception as e:
         return False, f"WhatsApp send failed: {e}"
 
+WEATHER_API_KEY = "96e102262e9745129d110636251111 "
+
+def get_weather(city):
+    if not WEATHER_API_KEY:
+        return "Weather feature needs an API key. Add it to WEATHER_API_KEY."
+    
+    try:
+        # OpenWeatherMap API call
+        url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={WEATHER_API_KEY}&units=metric"
+        response = requests.get(url)
+        data = response.json()
+
+        if data.get("cod") != 200:
+            return f"Could not find weather for '{city}'. Please check the city name."
+        
+        # Extract info
+        temp = data["main"]["temp"]
+        condition = data["weather"][0]["description"].title()
+        humidity = data["main"]["humidity"]
+        wind_speed = data["wind"]["speed"]
+
+        # Format result
+        result = (
+            f"Weather in {city}:\n"
+            f"Temperature: {temp}°C\n"
+            f"Condition: {condition}\n"
+            f"Humidity: {humidity}%\n"
+            f"Wind Speed: {wind_speed} m/s"
+        )
+        return result
+
+    except Exception as e:
+        return f"Error fetching weather: {str(e)}"
+
+NEWS_API_KEY = "231a93af4a8b4dc6bafbb736c20b20c3"
+
+def get_news(topic="general"):
+    if not NEWS_API_KEY:
+        return "News feature needs an API key. Add it to NEWS_API_KEY."
+    
+    try:
+        url = f"https://newsapi.org/v2/top-headlines?q={topic}&apiKey={NEWS_API_KEY}&pageSize=5"
+        response = requests.get(url)
+        data = response.json()
+        
+        if data.get("status") != "ok" or not data.get("articles"):
+            return f"No news found for '{topic}'."
+        
+        # Format top 5 headlines
+        news_list = ""
+        for i, article in enumerate(data["articles"], start=1):
+            title = article.get("title", "No title")
+            source = article.get("source", {}).get("name", "Unknown")
+            news_list += f"{i}. {title} ({source})\n"
+        
+        return f"Top news on '{topic}':\n{news_list}"
+
+    except Exception as e:
+        return f"Error fetching news: {str(e)}"
+
+def solve_math(cmd):
+    try:
+        if "calculate" in cmd.lower():
+            expression = cmd.lower().replace("calculate", "").strip()
+            result = eval(expression)  # simple math
+            speak(f"Result: {result}")
+            return f"Result: {result}"
+
+        elif "solve" in cmd.lower():
+            equation = cmd.lower().replace("solve", "").strip()
+            x = sp.symbols('x')
+            solution = sp.solve(equation, x)
+            speak(f"Solution: {solution}")
+            return f"Solution: {solution}"
+
+        else:
+            speak("Math command not recognized.")
+            return "Math command not recognized."
+
+    except Exception as e:
+        speak(f"Error: {str(e)}")
+        return f"Error: {str(e)}"
+
+EXCHANGE_API_KEY = "d97d653e87f3ea812b311d20"  # for currency
+
+def convert_unit(cmd):
+    try:
+        cmd_lower = cmd.lower()
+
+        # Currency Conversion
+        if "convert" in cmd_lower and "to" in cmd_lower:
+            words = cmd_lower.replace("convert", "").strip().split(" ")
+            amount = float(words[0])
+            from_unit = words[1].upper()
+            to_unit = words[-1].upper()
+
+            # Only handle USD/INR for free example, expand later
+            if from_unit == "USD" and to_unit == "INR":
+                rate = 82.5  # example rate
+                result = amount * rate
+                speak(f"{amount} {from_unit} = {result} {to_unit}")
+                return f"{amount} {from_unit} = {result} {to_unit}"
+            else:
+                speak(f"Conversion from {from_unit} to {to_unit} not supported yet.")
+                return f"Conversion from {from_unit} to {to_unit} not supported yet."
+
+        # Simple Length Conversion Example
+        elif "km to miles" in cmd_lower:
+            km = float(cmd_lower.split("km")[0].strip())
+            miles = km * 0.621371
+            speak(f"{km} km = {miles:.2f} miles")
+            return f"{km} km = {miles:.2f} miles"
+
+        # Temperature Conversion Example
+        elif "c to f" in cmd_lower:
+            c = float(cmd_lower.split("c")[0].strip())
+            f = (c * 9/5) + 32
+            speak(f"{c}°C = {f:.2f}°F")
+            return f"{c}°C = {f:.2f}°F"
+
+        else:
+            speak("Unit conversion not recognized.")
+            return "Unit conversion not recognized."
+
+    except Exception as e:
+        speak(f"Error: {str(e)}")
+        return f"Error: {str(e)}"
+
 # ------------- Search & utilities -------------
 def web_search_duckduckgo(query: str, limit: int = 3):
     if DDGS is None:
@@ -673,13 +816,16 @@ def process_command(raw_cmd: str) -> str:
         return reply
     
     if "who are you" in cmd:
-        reply = "I am Draco AI made by Aryan and his co-workers which are kaustubh and ritesh"
+        reply = "I am Draco AI made by Aryan and his co-workers which are kaustubh and ritesh."
         speak(reply)
         return reply
-    
-    # time/date
-    if "time" in cmd and "what" in cmd or cmd == "time":
-        t = datetime.datetime.now().strftime("%I:%M %p")
+    if "calculate" in cmd.lower() or "solve" in cmd.lower():
+        speak("I solved it.")
+        return solve_math(cmd)
+    if ("time" in cmd.lower() and "what" in cmd.lower()) or cmd.lower() == "time":
+        india_tz = pytz.timezone("Asia/Kolkata")
+        now = datetime.datetime.now(india_tz)
+        t = now.strftime("%I:%M %p").lstrip("0")  # 12-hour format, remove leading zero
         speak(f"The time is {t}")
         return f"The time is {t}"
 
@@ -725,7 +871,21 @@ def process_command(raw_cmd: str) -> str:
         r = open_whatsapp_web()
         speak(personality.respond(r))
         return r
-
+    if "weather" in cmd.lower():
+        city_name = cmd.lower().replace("weather in", "").strip()
+        weather_info = get_weather(city_name)
+        speak(weather_info)
+        return weather_info
+    if "news" in cmd.lower():
+        topic_name = cmd.lower().replace("news on", "").strip()
+        news_info = get_news(topic_name)
+        speak(news_info)
+        return news_info
+    if "convert" in cmd.lower() or "km to miles" in cmd.lower() or "c to f" in cmd.lower():
+        result = convert_unit(cmd)
+        speak(result)
+        return result
+    
     # whatsapp send (phrase: send whatsapp to 919xxxxxxxxx message hi)
     if "whatsapp" in cmd and "send" in cmd:
         # naive parse: "send whatsapp to 919xxxxxxxxx msg hello there"
@@ -854,6 +1014,49 @@ def process_command(raw_cmd: str) -> str:
         ok, msg = toggle_bluetooth(False)
         speak(msg)
         return msg
+
+    # file generation commands
+    if cmd.startswith("generate ppt on ") or cmd.startswith("create ppt on "):
+        topic = cmd.replace("generate ppt on ", "", 1).replace("create ppt on ", "", 1).strip()
+        if not topic:
+            return "Please provide a topic."
+        points = research_query_to_texts(topic, limit=8)
+        try:
+            path = _generate_pptx(f"{topic.title()} - Slides", points)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            speak("Slides ready. Opening the download link.")
+            return {"text": f"Generated slides for {topic}. Download: {url}", "action": "open_url", "url": url}
+        except Exception as e:
+            return f"Could not generate PPTX: {e}"
+
+    if cmd.startswith("generate doc on ") or cmd.startswith("create doc on "):
+        topic = cmd.replace("generate doc on ", "", 1).replace("create doc on ", "", 1).strip()
+        if not topic:
+            return "Please provide a topic."
+        points = research_query_to_texts(topic, limit=10)
+        try:
+            path = _generate_docx(f"{topic.title()} - Notes", points)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            speak("Document ready. Opening the download link.")
+            return {"text": f"Generated DOCX for {topic}. Download: {url}", "action": "open_url", "url": url}
+        except Exception as e:
+            return f"Could not generate DOCX: {e}"
+
+    if cmd.startswith("generate pdf on ") or cmd.startswith("create pdf on "):
+        topic = cmd.replace("generate pdf on ", "", 1).replace("create pdf on ", "", 1).strip()
+        if not topic:
+            return "Please provide a topic."
+        points = research_query_to_texts(topic, limit=12)
+        try:
+            path = _generate_pdf(f"{topic.title()} - Report", points)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            speak("PDF ready. Opening the download link.")
+            return {"text": f"Generated PDF for {topic}. Download: {url}", "action": "open_url", "url": url}
+        except Exception as e:
+            return f"Could not generate PDF: {e}"
 
     # type text into active window
     if cmd.startswith("type "):
@@ -1095,6 +1298,8 @@ def api_chats_clear():
 # ------------- Research & DOCX export -------------
 GENERATED_DIR = os.path.join(os.getcwd(), "generated")
 ensure_dir(GENERATED_DIR)
+UPLOADS_DIR = os.path.join(os.getcwd(), "uploads")
+ensure_dir(UPLOADS_DIR)
 
 def research_query_to_texts(query: str, limit: int = 6):
     text = web_search_duckduckgo(query, limit=limit)
@@ -1156,6 +1361,168 @@ def download_generated(filepath):
         return send_from_directory(directory, filename, as_attachment=True)
     except Exception as e:
         return {"ok": False, "error": str(e)}, 404
+
+def _extract_text_from_docx(path: str) -> str:
+    if not Document:
+        return ""
+    try:
+        doc = Document(path)
+        return "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+    except Exception:
+        return ""
+
+def _extract_text_from_pptx(path: str) -> str:
+    if not Presentation:
+        return ""
+    try:
+        prs = Presentation(path)
+        texts = []
+        for slide in prs.slides:
+            for shape in slide.shapes:
+                if hasattr(shape, "text"):
+                    t = (shape.text or "").strip()
+                    if t:
+                        texts.append(t)
+        return "\n".join(texts)
+    except Exception:
+        return ""
+
+def _extract_text_from_pdf(path: str) -> str:
+    if not PdfReader:
+        return ""
+    try:
+        reader = PdfReader(path)
+        texts = []
+        for page in reader.pages:
+            t = page.extract_text() or ""
+            if t.strip():
+                texts.append(t.strip())
+        return "\n".join(texts)
+    except Exception:
+        return ""
+
+def _summarize_text(text: str, max_len: int = 1200) -> str:
+    # naive summarizer: keep first N chars and compress whitespace
+    if not text:
+        return "No content to summarize."
+    s = " ".join(text.split())
+    return s[:max_len] + ("…" if len(s) > max_len else "")
+
+def _generate_docx(title: str, bullets) -> str:
+    if not Document:
+        raise RuntimeError("python-docx not installed.")
+    doc = Document()
+    doc.add_heading(title, level=1)
+    for b in bullets:
+        doc.add_paragraph(b)
+    safe = "".join(ch for ch in title if ch.isalnum() or ch in (" ","_","-")).strip() or "document"
+    name = f"{safe[:40].replace(' ','_')}_{int(time.time())}.docx"
+    path = os.path.join(GENERATED_DIR, name)
+    doc.save(path)
+    return path
+
+def _generate_pptx(title: str, bullets) -> str:
+    if not Presentation:
+        raise RuntimeError("python-pptx not installed.")
+    prs = Presentation()
+    # title slide
+    slide_layout = prs.slide_layouts[0]
+    slide = prs.slides.add_slide(slide_layout)
+    slide.shapes.title.text = title
+    slide.placeholders[1].text = "Generated by Draco"
+    # content slides
+    content_layout = prs.slide_layouts[1]
+    chunk = []
+    for i, b in enumerate(bullets, 1):
+        chunk.append(b)
+        if len(chunk) >= 6 or i == len(bullets):
+            s = prs.slides.add_slide(content_layout)
+            s.shapes.title.text = "Key Points"
+            tf = s.placeholders[1].text_frame
+            tf.clear()
+            for j, line in enumerate(chunk):
+                if j == 0:
+                    tf.text = line
+                else:
+                    tf.add_paragraph().text = line
+            chunk = []
+    safe = "".join(ch for ch in title if ch.isalnum() or ch in (" ","_","-")).strip() or "slides"
+    name = f"{safe[:40].replace(' ','_')}_{int(time.time())}.pptx"
+    path = os.path.join(GENERATED_DIR, name)
+    prs.save(path)
+    return path
+
+def _generate_pdf(title: str, paragraphs) -> str:
+    if not FPDF:
+        raise RuntimeError("fpdf not installed.")
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, txt=title, ln=True)
+    pdf.ln(4)
+    pdf.set_font("Arial", "", 12)
+    for p in paragraphs:
+        pdf.multi_cell(0, 8, txt=p)
+        pdf.ln(1)
+    safe = "".join(ch for ch in title if ch.isalnum() or ch in (" ","_","-")).strip() or "report"
+    name = f"{safe[:40].replace(' ','_')}_{int(time.time())}.pdf"
+    path = os.path.join(GENERATED_DIR, name)
+    pdf.output(path)
+    return path
+
+@app.route("/api/upload_process", methods=["POST"])
+def api_upload_process():
+    """
+    Accept a user file and optional instruction.
+    Returns processed summary or a modified file for download.
+    Form fields:
+      - file: uploaded file
+      - instruction: optional text instructions (e.g., "summarize", "shorten", etc.)
+    """
+    if "file" not in request.files:
+        return {"ok": False, "error": "no_file"}, 400
+    f = request.files["file"]
+    if f.filename == "":
+        return {"ok": False, "error": "empty_filename"}, 400
+    instruction = (request.form.get("instruction") or "").strip().lower()
+    filename = secure_filename(f.filename)
+    path = os.path.join(UPLOADS_DIR, filename)
+    f.save(path)
+
+    ext = os.path.splitext(filename)[1].lower()
+    text = ""
+    if ext == ".docx":
+        text = _extract_text_from_docx(path)
+    elif ext == ".pptx":
+        text = _extract_text_from_pptx(path)
+    elif ext == ".pdf":
+        text = _extract_text_from_pdf(path)
+    else:
+        return {"ok": False, "error": "unsupported_type"}, 400
+
+    if not text:
+        return {"ok": False, "error": "no_text_found"}, 400
+
+    # simple processing
+    title = os.path.splitext(filename)[0]
+    if "summarize" in instruction or "summary" in instruction:
+        summary = _summarize_text(text, max_len=1500)
+        # also generate a doc file to return
+        try:
+            out = _generate_docx(f"Summary of {title}", [summary])
+            rel = os.path.relpath(out, os.getcwd()).replace("\\", "/")
+            return {"ok": True, "summary": summary, "doc": f"/download/{rel}"}
+        except Exception:
+            return {"ok": True, "summary": summary}
+
+    # default: return content and optionally repackage to docx
+    try:
+        out = _generate_docx(f"Processed - {title}", [text[:6000]])
+        rel = os.path.relpath(out, os.getcwd()).replace("\\", "/")
+        return {"ok": True, "text": text[:3000], "doc": f"/download/{rel}"}
+    except Exception:
+        return {"ok": True, "text": text[:3000]}
 
 
 
