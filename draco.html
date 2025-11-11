@@ -4,6 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <title>Draco Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
       --bg-start: #0f0c1f;    /* dark purple */
@@ -16,7 +19,7 @@
       --line: #2b2753;
     }
     * { box-sizing: border-box; }
-    body { font-family: ui-sans-serif, system-ui, Arial, sans-serif; margin: 0; color: var(--text);
+    body { font-family: 'Poppins', 'Inter', system-ui, Arial, sans-serif; margin: 0; color: var(--text);
       background: linear-gradient(180deg, var(--bg-start), var(--bg-end));
       min-height: 100dvh;
     }
@@ -41,16 +44,46 @@
     .chip:hover { background:#1b1746; }
     .log { margin-top: 16px; max-height: 520px; overflow: auto; padding-right: 4px; }
     .item { background:#151236; border:1px solid var(--line); border-radius: 12px; padding:12px; margin:10px 0; }
+    /* Bot replies: darker than user for contrast */
+    body.light-mode .item.bot-item { background: linear-gradient(180deg, #e75a00, #c73d00); border-color: rgba(200,90,30,.7); }
+    body.light-mode .item.bot-item .bot { color:#ffffff; }
+    /* User messages: bright orange */
+    body.light-mode .item.user-item { background: linear-gradient(180deg, #ff8a00, #ff5500); border-color: rgba(255,120,60,.6); }
+    body.light-mode .item.user-item .user { color:#ffffff; }
+    /* Fallback using :has for browsers supporting it */
+    @supports(selector(.item:has(.bot))) {
+      body.light-mode .item:has(.bot) { background: linear-gradient(180deg, #e75a00, #c73d00); border-color: rgba(200,90,30,.7); }
+      body.light-mode .item:has(.user) { background: linear-gradient(180deg, #ff8a00, #ff5500); border-color: rgba(255,120,60,.6); }
+      body.light-mode .item:has(.bot) .bot,
+      body.light-mode .item:has(.user) .user { color:#ffffff; }
+    }
+
+    /* Dark mode: make bot bubbles slightly darker than user */
+    body.dark-mode .item.user-item { background: #151236; border-color: var(--line); }
+    body.dark-mode .item.bot-item { background: #0f0b2a; border-color: rgba(90,70,160,.6); }
+    body.dark-mode .item.bot-item .bot, body.dark-mode .item.user-item .user { color: var(--text); }
     .user { color:#b7a7ff; }
     .bot { color:#9bf0e2; }
     small { color:var(--muted); }
     /* layout: sidebar + main */
     .layout { display:grid; grid-template-columns: 290px 1fr; gap:14px; }
     .side { background: var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; overflow:auto; }
-    .profile { display:flex; align-items:center; gap:10px; padding:8px; border-bottom:1px solid rgba(111,141,255,.18); }
-    .avatar { width:72px; height:72px; border-radius:12px; background:#2a245b; display:grid; place-items:center; color:#eae4ff; border:1px solid var(--line); overflow:hidden; flex-shrink:0; }
-    .avatar img { width:100%; height:100%; object-fit:contain; display:block; padding:6px; }
-    .meta small { color:var(--muted); display:block; }
+    .profile { display:flex; flex-direction:column; align-items:center; gap:8px; padding:14px 8px 8px; border-bottom:1px solid rgba(111,141,255,.18); }
+    .avatar { width:64px; height:64px; border-radius:50%; display:grid; place-items:center; color:#fff; border:1px solid var(--line); overflow:hidden; flex-shrink:0; margin-bottom:20px; position:relative; transition: transform .3s ease-in-out; }
+    body.light-mode .avatar { background:#b30000; }
+    body.dark-mode .avatar { background:#070514; }
+    .avatar:hover { transform: scale(1.1); }
+    .avatar img { width:100%; height:100%; object-fit:cover; display:block; }
+    .avatar .fallback { width:100%; height:100%; display:grid; place-items:center; font-weight:700; font-size:1.4rem; }
+    body.light-mode .avatar { box-shadow: 0 0 18px rgba(255, 170, 0, .45); }
+    body.dark-mode .avatar { box-shadow: 0 0 18px rgba(120, 100, 255, .45); }
+    @keyframes logoPulse { 0%,100%{ filter: drop-shadow(0 0 6px rgba(255,180,80,.6)); } 50%{ filter: drop-shadow(0 0 12px rgba(255,220,120,.9)); } }
+    @keyframes logoPulseDark { 0%,100%{ filter: drop-shadow(0 0 6px rgba(120,100,255,.6)); } 50%{ filter: drop-shadow(0 0 12px rgba(160,140,255,.9)); } }
+    body.light-mode .avatar { animation: logoPulse 2.2s infinite ease-in-out; }
+    body.dark-mode .avatar { animation: logoPulseDark 2.2s infinite ease-in-out; }
+    .meta small { color:var(--muted); display:block; font-style: italic; font-size: .9rem; letter-spacing: .3px; }
+    #profName { font-weight: 700; font-size: 1.5rem; letter-spacing: .5px; }
+    .btn { text-transform: uppercase; }
     .history { margin-top:12px; max-height: 520px; overflow:auto; }
     .hitem { padding:8px 10px; border-radius:10px; border:1px solid var(--line); margin:8px 0; color:#d9d3ff; background:#151236; cursor:pointer; }
     .hitem:hover { background:#1b1746; }
@@ -58,9 +91,151 @@
     .toggleBar { text-align:right; margin-bottom:8px; }
     .layout.collapsed { grid-template-columns: 0 1fr; }
     .layout.expanded { grid-template-columns: 420px 1fr; }
+
+    /* THEME OVERRIDES AND ENHANCEMENTS */
+    :root { --transition: 0.6s ease-in-out; }
+    body { transition: background var(--transition), color var(--transition); }
+
+    /* Dark mode (default) */
+    body.dark-mode {
+      --bg-start: #2b004f;
+      --bg-end: #0b001f;
+      --card: rgba(20, 12, 40, 0.55);
+      --accent: #2200aa;
+      --accent-2: #5d3bff;
+      --text: #f5f5f5;
+      --muted: #bfbad9;
+      --line: rgba(110, 90, 190, 0.35);
+    }
+
+    /* Light mode */
+    body.light-mode {
+      --bg-start: #ff6a00;
+      --bg-end: #cc3300;
+      --card: rgba(255, 255, 255, 0.65);
+      --accent: #b30000;
+      --accent-2: #ffaa00;
+      --text: #ff0000;
+      --muted: #ffe1c9;
+      --line: rgba(255, 180, 120, 0.55);
+    }
+
+    /* global bg */
+    body.dark-mode,
+    body.light-mode {
+      background: linear-gradient(180deg, var(--bg-start), var(--bg-end));
+    }
+    /* Force red text across UI in light mode */
+    body.light-mode,
+    body.light-mode .wrap,
+    body.light-mode .card,
+    body.light-mode .side,
+    body.light-mode .chip,
+    body.light-mode .hitem,
+    body.light-mode .item,
+    body.light-mode .status,
+    body.light-mode .meta,
+    body.light-mode label,
+    body.light-mode .row,
+    body.light-mode .log,
+    body.light-mode small,
+    body.light-mode .input,
+    body.light-mode .input input { color: var(--text); }
+    body.light-mode input::placeholder { color: rgba(255,0,0,0.85); }
+    body.light-mode .chip { color: var(--text); }
+
+    /* Sidebar glass */
+    .side { background: var(--card); backdrop-filter: blur(12px); box-shadow: 0 0 24px rgba(0,0,0,.25), inset 0 0 0 1px var(--line); }
+
+    /* Chat panel glow */
+    .card { box-shadow: 0 0 0 1px var(--line), 0 0 28px rgba(0,0,0,.25); }
+
+    /* Buttons */
+    .btn { position: relative; border-radius: 15px; padding: 12px 20px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; border: 1px solid transparent; transition: background var(--transition), box-shadow var(--transition), transform .2s ease; }
+    body.light-mode .btn { background: #b30000; border-color: rgba(255,120,60,.35); box-shadow: 0 0 12px rgba(255, 120, 60, .25); }
+    body.dark-mode .btn { background: #2200aa; border-color: rgba(120,100,255,.35); box-shadow: 0 0 12px rgba(120, 100, 255, .25); }
+    .btn:hover { transform: scale(1.05); }
+    body.light-mode .btn:hover { box-shadow: 0 0 22px rgba(255, 160, 60, .55); }
+    body.dark-mode .btn:hover { box-shadow: 0 0 22px rgba(120, 100, 255, .55); }
+
+    /* Flame particle system */
+    @keyframes flameRise {
+      0% { transform: translateY(0) scale(1); opacity: .9; }
+      50% { opacity: 1; }
+      100% { transform: translateY(-30px) scale(.5); opacity: 0; }
+    }
+    .flame-particle { position:absolute; width:4px; height:10px; border-radius:50%; filter: blur(2px); animation: flameRise 2s infinite ease-in-out; }
+    body.light-mode .flame-particle { background: linear-gradient(to top, #ff6600, #ff3300); }
+    body.dark-mode .flame-particle { background: linear-gradient(to top, #4400aa, #6600ff); }
+    .button-container { position: relative; }
+    .button-container::before, .button-container::after { content:""; position:absolute; bottom:0; left:50%; width:6px; height:15px; border-radius:50%; animation: flameRise 1.5s infinite ease-in-out; opacity:.8; transform: translateX(-50%); }
+    body.light-mode .button-container::before, body.light-mode .button-container::after { background: linear-gradient(to top, #ffaa00, #ff3300); }
+    body.dark-mode .button-container::before, body.dark-mode .button-container::after { background: linear-gradient(to top, #330066, #6600ff); }
+
+    /* Theme toggle (checkbox + label) */
+    .theme-toggle { position: relative; width:56px; height:28px; display:inline-block; cursor:pointer; }
+    .theme-toggle .slider { position:absolute; inset:0; border-radius:999px; border:1px solid var(--line); transition: all 0.4s ease-in-out; box-shadow: 0 0 12px rgba(0,0,0,.25); }
+    /* Gradient by theme */
+    body.light-mode .theme-toggle .slider { background: linear-gradient(90deg, #ff9900, #cc3300); box-shadow: 0 0 12px rgba(255,140,60,.45); }
+    body.dark-mode .theme-toggle .slider { background: linear-gradient(90deg, #3a00b3, #0044ff); box-shadow: 0 0 12px rgba(120,100,255,.45); }
+    .theme-toggle .slider::before { content:""; position:absolute; top:2px; left:2px; width:24px; height:24px; background:#fff; border-radius:50%; transition: all 0.4s ease-in-out; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+    /* Slide when checked */
+    #themeCheckbox:checked + label.theme-toggle .slider::before { transform: translateX(24px); }
+
+    /* Inputs and chips adapt */
+    .chip { background:#17143a; }
+    .chip:hover { background:#1b1746; }
+    body.light-mode .chip { background: rgba(255,255,255,.25); }
+    /* Inputs: light mode orange boxes with white text */
+    body.light-mode .input { background: linear-gradient(180deg, #ff8a00, #ff5500); color:#fff; border-color: rgba(255,120,60,.5); }
+    body.light-mode input[type=text] { color:#ffffff; }
+    body.light-mode input[type=text]::placeholder { color: rgba(255,255,255,0.85); }
+
+    /* Flame background */
+    .flames { position: fixed; left:0; right:0; bottom:0; height:180px; pointer-events:none; z-index:0; overflow:hidden; }
+    .flame { position:absolute; bottom:-20px; width:60px; height:120px; background: radial-gradient(50% 60% at 50% 60%, rgba(40,0,60,.45), transparent 70%); filter: blur(6px); animation: rise 6s infinite ease-in-out; opacity:.7; }
+    .flame.f2 { width:80px; height:140px; background: radial-gradient(50% 60% at 50% 60%, rgba(90,40,160,.28), transparent 70%); animation-duration:7.5s; animation-delay:.6s; }
+    .flame.f3 { width:50px; height:110px; background: radial-gradient(50% 60% at 50% 60%, rgba(140,90,220,.18), transparent 70%); animation-duration:5.5s; animation-delay:.3s; }
+    body.light-mode .flame { background: radial-gradient(50% 60% at 50% 60%, rgba(255,170,0,.35), transparent 70%); }
+    body.light-mode .flame.f2 { background: radial-gradient(50% 60% at 50% 60%, rgba(255,120,0,.25), transparent 70%); }
+    body.light-mode .flame.f3 { background: radial-gradient(50% 60% at 50% 60%, rgba(255,80,0,.18), transparent 70%); }
+    .flame:nth-child(1){left:8%} .flame:nth-child(2){left:24%} .flame:nth-child(3){left:42%} .flame:nth-child(4){left:64%} .flame:nth-child(5){left:82%}
+    @keyframes rise { 0%{transform:translateY(20px) scale(.9);opacity:0} 15%{opacity:.7} 50%{transform:translateY(-40px) scale(1.04)} 100%{transform:translateY(-120px) scale(.96);opacity:0} }
+
+    /* Loader overlay */
+    #loaderOverlay { position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; align-items:center; justify-content:center; z-index:9999; backdrop-filter: blur(2px); }
+    .draco-loader { position:relative; width:130px; height:130px; border-radius:18px; background:var(--card); border:1px solid var(--line); display:grid; place-items:center; box-shadow:0 10px 26px rgba(0,0,0,.25); transition: background var(--transition), border-color var(--transition); }
+    .draco-loader img { width:64px; height:64px; object-fit:contain; }
+    .flame-pulse { position:absolute; inset:-8px; border-radius:20px; background: radial-gradient(60% 60% at 50% 50%, rgba(90,40,160,.28), transparent 70%); animation:pulse 1.6s infinite ease-in-out; filter: blur(10px); opacity:.7; }
+    body.light-mode .flame-pulse { background: radial-gradient(60% 60% at 50% 50%, rgba(255,120,0,.25), transparent 70%); }
+    @keyframes pulse { 0%,100%{transform:scale(.96);opacity:.55} 50%{transform:scale(1.04);opacity:.9} }
+
+    /* Floating action bar */
+    .floating-bar { position:fixed; right:18px; bottom:18px; background:#0e1230; border:1px solid #4b3a9f; border-radius:16px; box-shadow:0 8px 22px rgba(0,0,0,.28); padding:10px; display:flex; gap:8px; z-index:10; transition: background var(--transition), border-color var(--transition), transform .2s ease; }
+    body.light-mode .floating-bar { background:#fff0ea; border-color:#ff6f61; }
+    .floating-bar:hover { transform: translateY(-2px); }
+    .floating-bar .btn { position:relative; overflow:hidden; }
+    .floating-bar .btn::after { content:""; position:absolute; left:-30%; top:0; width:30%; height:100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); transform: skewX(-15deg); opacity:0; transition: opacity .25s ease, left .45s ease; }
+    .floating-bar .btn:hover::after { opacity:1; left:130%; }
+
+    .themeToggle { margin-top:10px; display:flex; gap:8px; align-items:center; justify-content:space-between; }
+    .toggleSwitch .btn { padding:10px 12px; }
+
+    @media (max-width: 860px) {
+      .wrap { margin: 18px auto; }
+      .layout { grid-template-columns: 1fr; }
+      .floating-bar { right: 12px; bottom: 12px; }
+    }
   </style>
 </head>
 <body>
+  <div class="flames" aria-hidden="true">
+    <div class="flame"></div>
+    <div class="flame f2"></div>
+    <div class="flame f3"></div>
+    <div class="flame"></div>
+    <div class="flame f2"></div>
+  </div>
   <div class="wrap">
     <h1>Draco Assistant</h1>
     <div class="status"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
@@ -72,33 +247,39 @@
       <div class="side" id="sidebar">
         <div class="profile">
           <div class="avatar" id="avatar">
-            <img id="dracoLogo" src="/static/draco-logo.png" alt="Draco Logo" />
+            <img id="dracoLogo" src="/static/draco-logo.jpg" alt="Draco Logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';" />
+            <div class="fallback" style="display:none;">D</div>
           </div>
-          <div class="meta">
+          <div class="meta" style="text-align:center;">
             <div id="profName">Draco AI</div>
             <small id="profEmail">Powered by Aryan and his co-workers</small>
           </div>
         </div>
         <div class="card" style="margin-top:10px;">
-          <div style="font-weight:600; margin-bottom:6px;">Generate Files</div>
-          <div class="row" style="flex-direction:column; gap:8px;">
+          <div style="font-weight:600; margin-bottom:10px; text-align:center;">Quick Actions</div>
+          <div class="row" style="flex-direction:column; gap:12px;">
             <input id="genTopicSide" type="text" class="input" placeholder="Topic (e.g., Quantum Computing)" />
-            <button class="btn" id="genPPTSide" style="width:100%;">Generate PPT</button>
-            <button class="btn" id="genDOCSide" style="width:100%;">Generate DOC</button>
-            <button class="btn" id="genPDFSide" style="width:100%;">Generate PDF</button>
+            <div class="button-container"><button class="btn" id="genPPTSide" style="width:100%;">Generate PPT</button></div>
+            <div class="button-container"><button class="btn" id="genPDFSide" style="width:100%;">Generate PDF</button></div>
+            <div class="button-container"><button class="btn" id="genDOCSide" style="width:100%;">Generate DOCX</button></div>
+            <input id="fileInput" type="file" accept=".pdf,.pptx,.docx" style="display:none;" />
+            <input id="instruction" type="text" class="input" placeholder="Instruction (optional, e.g., summarize)" style="display:none;" />
+            <div class="button-container"><button class="btn" id="chooseFileBtn" style="width:100%;">Choose File</button></div>
+            <div class="button-container"><button class="btn" id="uploadBtn" style="width:100%;">Upload File</button></div>
+            <div class="themeToggle" style="margin-top:4px;">
+              <div style="font-weight:600;">Theme</div>
+              <div class="toggleSwitch" style="display:flex; align-items:center; gap:8px;">
+                <input type="checkbox" id="themeCheckbox" style="position:absolute; opacity:0; width:0; height:0;" />
+                <label for="themeCheckbox" class="theme-toggle" aria-label="Toggle theme">
+                  <span class="slider"></span>
+                </label>
+              </div>
+            </div>
+            <div id="fileNameLabel" style="margin-top:2px; color:var(--muted); font-size:13px;"></div>
+            <div id="uploadNote" style="margin-top:4px; color:var(--muted); font-size:13px;"></div>
           </div>
         </div>
         <div class="history" id="history"></div>
-        <div class="card" style="margin-top:12px;">
-          <div style="font-weight:600; margin-bottom:6px;">Upload & Process File</div>
-          <input id="fileInput" type="file" accept=".pdf,.pptx,.docx" class="input" />
-          <label for="instruction" style="margin-top:8px;">Instruction (e.g., summarize):</label>
-          <input id="instruction" type="text" class="input" placeholder="summarize, shorten, etc." />
-          <div class="row" style="margin-top:10px;">
-            <button class="btn" id="uploadBtn">Upload & Process</button>
-          </div>
-          <div id="uploadNote" style="margin-top:8px; color:var(--muted); font-size:13px;"></div>
-        </div>
       </div>
       <div class="card">
         <div class="input" style="margin-bottom:10px;">
@@ -145,7 +326,7 @@
 
     function appendItem(text, who='bot') {
       const el = document.createElement('div');
-      el.className = 'item';
+      el.className = 'item ' + (who === 'bot' ? 'bot-item' : 'user-item');
       el.innerHTML = `<div class="${who}">${text}</div>`;
       log.appendChild(el);
       log.scrollTop = log.scrollHeight;
@@ -421,11 +602,33 @@
     // Update sidebar in guest mode too
     renderProfile();
 
+    // Theme checkbox toggle wiring with persistence
+    const THEME_KEY = 'draco-theme';
+    const themeCheckbox = document.getElementById('themeCheckbox');
+    function applyTheme(theme){
+      document.body.classList.remove('light-mode','dark-mode');
+      document.body.classList.add(theme);
+      try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+      if (themeCheckbox) themeCheckbox.checked = (theme === 'light-mode');
+    }
+    const savedTheme = (function(){ try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; } })();
+    applyTheme(savedTheme || 'light-mode');
+    if (themeCheckbox) {
+      themeCheckbox.addEventListener('change', () => {
+        const next = themeCheckbox.checked ? 'light-mode' : 'dark-mode';
+        applyTheme(next);
+      });
+    }
+
     // Upload & Process
     const fileInput = document.getElementById('fileInput');
     const instructionEl = document.getElementById('instruction');
     const uploadBtn = document.getElementById('uploadBtn');
     const uploadNote = document.getElementById('uploadNote');
+    const chooseFileBtn = document.getElementById('chooseFileBtn');
+    if (chooseFileBtn) {
+      chooseFileBtn.onclick = () => { fileInput.click(); };
+    }
     uploadBtn.onclick = async () => {
       uploadNote.textContent = 'Processing...';
       const f = fileInput.files && fileInput.files[0];
@@ -443,11 +646,8 @@
         appendItem(msg || 'Processed.', 'bot');
         if (j.doc) {
           const a = document.createElement('a');
-          a.href = j.doc;
-          a.target = '_blank';
-          a.textContent = 'Download processed file';
-          uploadNote.innerHTML = '';
-          uploadNote.appendChild(a);
+          a.href = j.doc; a.target = '_blank'; a.textContent = 'Download processed file';
+          uploadNote.innerHTML = ''; uploadNote.appendChild(a);
         } else {
           uploadNote.textContent = 'Done.';
         }
@@ -455,6 +655,21 @@
         uploadNote.textContent = 'Upload failed.';
       }
     };
+
+    // Ambient flame particles for buttons
+    function spawnFlames(container){
+      for(let i=0;i<6;i++){
+        const p = document.createElement('div');
+        p.className = 'flame-particle';
+        p.style.left = (20 + Math.random()*60) + '%';
+        p.style.bottom = (Math.random()*6) + 'px';
+        p.style.animationDelay = (Math.random()*1.5) + 's';
+        p.style.opacity = 0.6 + Math.random()*0.4;
+        container.style.overflow = 'visible';
+        container.appendChild(p);
+      }
+    }
+    document.querySelectorAll('.button-container').forEach(spawnFlames);
 
     // Generate Files (Sidebar only)
     const genTopicSide = document.getElementById('genTopicSide');
