@@ -1527,9 +1527,41 @@ def _generate_docx(title: str, bullets) -> str:
     if not Document:
         raise RuntimeError("python-docx not installed.")
     doc = Document()
+    doc.core_properties.title = title
+    try:
+        doc.core_properties.author = "Draco AI"
+        doc.core_properties.subject = "Generated Document"
+    except Exception:
+        pass
+    sec = doc.sections[0]
+    try:
+        sec.top_margin, sec.bottom_margin, sec.left_margin, sec.right_margin = [sp.Inches(1)] * 4  # type: ignore
+    except Exception:
+        try:
+            from docx.shared import Inches as _In
+            sec.top_margin = _In(1)
+            sec.bottom_margin = _In(1)
+            sec.left_margin = _In(1)
+            sec.right_margin = _In(1)
+        except Exception:
+            pass
+    try:
+        header = sec.header
+        hpar = header.paragraphs[0] if header.paragraphs else header.add_paragraph("")
+        hpar.text = title
+        try:
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            hpar.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        except Exception:
+            pass
+    except Exception:
+        pass
     doc.add_heading(title, level=1)
     for b in bullets:
-        doc.add_paragraph(b)
+        try:
+            p = doc.add_paragraph(str(b), style="List Bullet")
+        except Exception:
+            p = doc.add_paragraph(str(b))
     safe = "".join(ch for ch in title if ch.isalnum() or ch in (" ","_","-")).strip() or "document"
     name = f"{safe[:40].replace(' ','_')}_{int(time.time())}.docx"
     path = os.path.join(GENERATED_DIR, name)
@@ -1724,15 +1756,55 @@ def _generate_pptx(title: str, bullets, max_sentences_per_slide: int = 4) -> str
 def _generate_pdf(title: str, paragraphs) -> str:
     if not FPDF:
         raise RuntimeError("fpdf not installed.")
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
+    class PDFReport(FPDF):
+        def __init__(self, t: str):
+            super().__init__()
+            self.t = t
+        def header(self):
+            try:
+                self.set_font("Helvetica", "", 10)
+                self.set_text_color(100)
+                self.cell(0, 8, self.t, ln=1, align="C")
+                self.set_draw_color(200)
+                self.set_line_width(0.2)
+                self.line(self.l_margin, self.get_y(), self.w - self.r_margin, self.get_y())
+                self.ln(2)
+            except Exception:
+                pass
+        def footer(self):
+            try:
+                self.set_y(-12)
+                self.set_font("Helvetica", "", 9)
+                self.set_text_color(120)
+                self.cell(0, 10, f"Page {self.page_no()}", align="C")
+            except Exception:
+                pass
+    pdf = PDFReport(title)
+    pdf.set_margins(18, 16, 18)
+    pdf.set_auto_page_break(auto=True, margin=18)
+    try:
+        pdf.set_title(title)
+        pdf.set_author("Draco AI")
+        pdf.set_subject("Generated Report")
+    except Exception:
+        pass
     pdf.add_page()
-    pdf.set_font("Arial", "B", 16)
-    pdf.cell(0, 10, txt=title, ln=True)
-    pdf.ln(4)
-    pdf.set_font("Arial", "", 12)
+    pdf.set_text_color(0)
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.cell(0, 10, txt=title, ln=True, align="C")
+    pdf.ln(2)
+    try:
+        now_str = datetime.datetime.now().strftime("%b %d, %Y")
+        pdf.set_font("Helvetica", "", 11)
+        pdf.set_text_color(80)
+        pdf.cell(0, 8, txt=now_str, ln=True, align="C")
+    except Exception:
+        pass
+    pdf.ln(6)
+    pdf.set_text_color(0)
+    pdf.set_font("Helvetica", "", 12)
     for p in paragraphs:
-        pdf.multi_cell(0, 8, txt=str(p))
+        pdf.multi_cell(0, 7, txt=str(p))
         pdf.ln(1)
     safe = "".join(ch for ch in title if ch.isalnum() or ch in (" ","_","-")).strip() or "report"
     name = f"{safe[:40].replace(' ','_')}_{int(time.time())}.pdf"
@@ -1778,14 +1850,49 @@ def api_upload_process():
     # simple processing
     title = os.path.splitext(filename)[0]
     if "summarize" in instruction or "summary" in instruction:
-        summary = _summarize_text(text, max_len=1500)
-        # also generate a doc file to return
+        summary = _summarize_text(text, max_len=1200)
         try:
             out = _generate_docx(f"Summary of {title}", [summary])
             rel = os.path.relpath(out, os.getcwd()).replace("\\", "/")
             return {"ok": True, "summary": summary, "doc": f"/download/{rel}"}
         except Exception:
             return {"ok": True, "summary": summary}
+
+    if "shorten" in instruction:
+        short = _summarize_text(text, max_len=800)
+        try:
+            out = _generate_docx(f"Shortened - {title}", [short])
+            rel = os.path.relpath(out, os.getcwd()).replace("\\", "/")
+            return {"ok": True, "text": short, "doc": f"/download/{rel}"}
+        except Exception:
+            return {"ok": True, "text": short}
+
+    if "lengthen" in instruction:
+        augmented = text
+        try:
+            extra = web_search_duckduckgo(title, limit=3)
+            if isinstance(extra, str) and extra and not extra.startswith("ddgs package not installed"):
+                augmented = (text + "\n\n" + extra)[:8000]
+        except Exception:
+            pass
+        try:
+            out = _generate_docx(f"Extended - {title}", [augmented])
+            rel = os.path.relpath(out, os.getcwd()).replace("\\", "/")
+            return {"ok": True, "text": augmented[:3000], "doc": f"/download/{rel}"}
+        except Exception:
+            return {"ok": True, "text": augmented[:3000]}
+
+    if "search" in instruction:
+        try:
+            results = web_search_duckduckgo(title, limit=5)
+        except Exception as e:
+            results = f"Search error: {e}"
+        try:
+            out = _generate_docx(f"Search Results - {title}", [str(results)])
+            rel = os.path.relpath(out, os.getcwd()).replace("\\", "/")
+            return {"ok": True, "text": str(results)[:3000], "doc": f"/download/{rel}"}
+        except Exception:
+            return {"ok": True, "text": str(results)[:3000]}
 
     # default: return content and optionally repackage to docx
     try:

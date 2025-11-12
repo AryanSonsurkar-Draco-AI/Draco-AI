@@ -143,6 +143,8 @@
     body.light-mode .input input { color: var(--text); }
     body.light-mode input::placeholder { color: rgba(255,0,0,0.85); }
     body.light-mode .chip { color: var(--text); }
+    /* Make upload status clearly visible in light mode */
+    body.light-mode #uploadNote { color: #ff0000 !important; }
 
     /* Sidebar glass */
     .side { background: var(--card); backdrop-filter: blur(12px); box-shadow: 0 0 24px rgba(0,0,0,.25), inset 0 0 0 1px var(--line); }
@@ -308,6 +310,12 @@
         </div>
         <div class="log" id="log"></div>
         <small>Tip: Try "open youtube", "play music", "list notes", "remind me to drink water at 19:30"</small>
+        <div class="chipbar" id="fileChips" style="margin-top:10px;">
+          <div class="chip" data-instruction="summarize">Summarize File</div>
+          <div class="chip" data-instruction="shorten">Shorten File</div>
+          <div class="chip" data-instruction="lengthen">Lengthen File</div>
+          <div class="chip" data-instruction="search">Search Web For Same</div>
+        </div>
       </div>
     </div>
   </div>
@@ -659,8 +667,17 @@
     const uploadBtn = document.getElementById('uploadBtn');
     const uploadNote = document.getElementById('uploadNote');
     const chooseFileBtn = document.getElementById('chooseFileBtn');
+    const fileNameLabel = document.getElementById('fileNameLabel');
     if (chooseFileBtn) {
       chooseFileBtn.onclick = () => { fileInput.click(); };
+    }
+    if (fileInput) {
+      fileInput.onchange = () => {
+        try {
+          const f = fileInput.files && fileInput.files[0];
+          fileNameLabel.textContent = f ? ('Selected: ' + f.name) : '';
+        } catch (e) {}
+      };
     }
     uploadBtn.onclick = async () => {
       uploadNote.textContent = 'Processing...';
@@ -754,6 +771,24 @@
       const t = (genTopicSide.value||'').trim(); if (!t) return;
       sendCommand('generate pdf on ' + t);
     };
+
+    // File instruction chips under main box (not in sidebar)
+    const fileChips = document.getElementById('fileChips');
+    if (fileChips) {
+      fileChips.addEventListener('click', async (e) => {
+        const t = e.target.closest('.chip');
+        if (!t) return;
+        const instr = t.getAttribute('data-instruction') || '';
+        if (instructionEl) instructionEl.value = instr;
+        const f = fileInput.files && fileInput.files[0];
+        if (!f) {
+          uploadNote.textContent = 'Please choose a file first.';
+          try { chooseFileBtn.focus(); } catch (e) {}
+          return;
+        }
+        uploadBtn.click();
+      });
+    }
   </script>
 </body>
 </html>
