@@ -1304,6 +1304,35 @@ def api_profile_clear():
     set_user_profile(email, {})
     return {"ok": True}
 
+@app.route("/api/guest_profile", methods=["GET", "POST"])
+def api_guest_profile():
+    # Use MemoryManager.long as guest profile store
+    if request.method == "GET":
+        return {"ok": True, "profile": memory.long}
+    data = request.json or {}
+    if not isinstance(data, dict):
+        return {"ok": False, "error": "invalid"}, 400
+    try:
+        # Only accept simple keys to avoid arbitrary writes
+        allowed = {"name", "hobbies", "favorite_subject"}
+        for k, v in data.items():
+            if k in allowed:
+                memory.set_pref(k, v)
+        return {"ok": True, "profile": memory.long}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}, 500
+
+@app.route("/api/guest_profile/clear", methods=["POST"])
+def api_guest_profile_clear():
+    try:
+        for k in ["name", "hobbies", "favorite_subject"]:
+            if k in memory.long:
+                del memory.long[k]
+        memory._save()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}, 500
+
 @app.route("/api/chat_history", methods=["GET"]) 
 def api_chat_history():
     email = get_logged_in_email()

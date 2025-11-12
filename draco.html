@@ -453,8 +453,13 @@
         const d = await r.json();
         user = d || { logged_in:false };
         if (!user.logged_in) {
-          // guest mode is allowed when directly opening this page
-          appendItem('Guest mode: your chats won\'t be saved. Sign in to sync.', 'bot');
+          appendItem('Guest mode: your chats won\'t be saved. Profile stored locally.', 'bot');
+          // load guest profile into memory card
+          try {
+            const gp = await fetch('/api/guest_profile');
+            const gd = await gp.json();
+            if (gd && gd.ok) { user.profile = gd.profile || {}; renderProfile(); }
+          } catch (e) {}
           return;
         }
         appendItem('Signed in as ' + user.email, 'bot');
@@ -724,7 +729,8 @@
           if (name !== null) body.name = name.trim();
           if (hobbies !== null) body.hobbies = hobbies.split(',').map(s => s.trim()).filter(Boolean);
           if (fav !== null) body.favorite_subject = fav.trim();
-          const r = await fetch('/api/profile', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+          const url = (user && user.logged_in) ? '/api/profile' : '/api/guest_profile';
+          const r = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
           const d = await r.json();
           if (d && d.ok) { user.profile = d.profile || {}; renderProfile(); appendItem('Profile updated.', 'bot'); }
           else appendItem('Failed to update profile.', 'bot');
@@ -736,7 +742,8 @@
         try {
           const yes = confirm('This will clear your stored profile. Continue?');
           if (!yes) return;
-          const r = await fetch('/api/profile/clear', { method:'POST' });
+          const url = (user && user.logged_in) ? '/api/profile/clear' : '/api/guest_profile/clear';
+          const r = await fetch(url, { method:'POST' });
           const d = await r.json();
           if (d && d.ok) { user.profile = {}; renderProfile(); appendItem('Your profile has been cleared.', 'bot'); }
           else appendItem('Failed to clear profile.', 'bot');
