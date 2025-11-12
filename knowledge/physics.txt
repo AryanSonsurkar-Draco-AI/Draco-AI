@@ -1,0 +1,7 @@
+Kinematics: Use s = ut + 1/2 a t^2 and v^2 = u^2 + 2 a s. Draw a timeline, track units.
+Forces: Free-body diagram; sum of forces = m a along each axis.
+Energy: ΔK + ΔU = W_nonconservative. Consider friction and springs.
+Momentum: For collisions, use conservation of momentum; for elastic, also conserve kinetic energy.
+Rotation: τ = I α, and ω^2 = ω0^2 + 2 α θ. Watch rolling without slipping (v = ω R).
+Waves: v = f λ. For interference, use path difference and phase.
+Electricity: V = I R. Series/parallel rules; KCL/KVL for circuits.

@@ -280,6 +280,14 @@
           </div>
         </div>
         <div class="history" id="history"></div>
+        <div class="card" id="memoryCard" style="margin-top:10px;">
+          <div style="font-weight:600; margin-bottom:10px; text-align:center;">Your Profile</div>
+          <div id="memInfo" style="font-size:14px; color:var(--text);"></div>
+          <div class="row" style="flex-direction:column; gap:8px; margin-top:10px;">
+            <div class="button-container"><button class="btn" id="editInfoBtn" style="width:100%;">Edit Info</button></div>
+            <div class="button-container"><button class="btn" id="forgetMeBtn" style="width:100%;">Forget Me</button></div>
+          </div>
+        </div>
       </div>
       <div class="card">
         <div class="input" style="margin-bottom:10px;">
@@ -346,6 +354,18 @@
       const profEmail = document.getElementById('profEmail');
       if (profName) profName.textContent = 'Draco AI';
       if (profEmail) profEmail.textContent = 'Powered by Aryan and his co-workers';
+      // Render memory card with stored info
+      const memInfo = document.getElementById('memInfo');
+      if (!memInfo) return;
+      const p = (user && user.profile) ? user.profile : {};
+      const name = p.name || '—';
+      const hobbies = Array.isArray(p.hobbies) ? p.hobbies.join(', ') : (p.hobbies || '—');
+      const fav = p.favorite_subject || '—';
+      memInfo.innerHTML = `
+        <div><strong>Name:</strong> ${name}</div>
+        <div><strong>Hobbies:</strong> ${hobbies}</div>
+        <div><strong>Favorite Subject:</strong> ${fav}</div>
+      `;
     }
 
     function renderHistory() {
@@ -689,6 +709,40 @@
       const t = (genTopicSide.value||'').trim(); if (!t) return;
       sendCommand('generate doc on ' + t);
     };
+
+    // Memory card actions
+    const editInfoBtn = document.getElementById('editInfoBtn');
+    const forgetMeBtn = document.getElementById('forgetMeBtn');
+    if (editInfoBtn) {
+      editInfoBtn.onclick = async () => {
+        try {
+          const cur = (user && user.profile) ? user.profile : {};
+          const name = prompt('Your name?', cur.name || '');
+          const hobbies = prompt('Your hobbies (comma-separated)?', Array.isArray(cur.hobbies) ? cur.hobbies.join(', ') : (cur.hobbies || ''));
+          const fav = prompt('Favorite subject?', cur.favorite_subject || '');
+          const body = {};
+          if (name !== null) body.name = name.trim();
+          if (hobbies !== null) body.hobbies = hobbies.split(',').map(s => s.trim()).filter(Boolean);
+          if (fav !== null) body.favorite_subject = fav.trim();
+          const r = await fetch('/api/profile', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+          const d = await r.json();
+          if (d && d.ok) { user.profile = d.profile || {}; renderProfile(); appendItem('Profile updated.', 'bot'); }
+          else appendItem('Failed to update profile.', 'bot');
+        } catch (e) { appendItem('Error updating profile.', 'bot'); }
+      };
+    }
+    if (forgetMeBtn) {
+      forgetMeBtn.onclick = async () => {
+        try {
+          const yes = confirm('This will clear your stored profile. Continue?');
+          if (!yes) return;
+          const r = await fetch('/api/profile/clear', { method:'POST' });
+          const d = await r.json();
+          if (d && d.ok) { user.profile = {}; renderProfile(); appendItem('Your profile has been cleared.', 'bot'); }
+          else appendItem('Failed to clear profile.', 'bot');
+        } catch (e) { appendItem('Error clearing profile.', 'bot'); }
+      };
+    }
     document.getElementById('genPDFSide').onclick = () => {
       const t = (genTopicSide.value||'').trim(); if (!t) return;
       sendCommand('generate pdf on ' + t);
