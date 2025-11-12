@@ -14,8 +14,10 @@ import subprocess
 import platform
 import webbrowser
 from urllib.parse import quote as url_quote
+from urllib.parse import urlparse
 from collections import deque
 from typing import Optional
+import re
 from flask import session
 from flask import Flask, send_from_directory, request, session, redirect, url_for, jsonify
 from flask_socketio import SocketIO, emit
@@ -1029,13 +1031,31 @@ def process_command(raw_cmd: str) -> str:
         topic = cmd.replace("generate ppt on ", "", 1).replace("create ppt on ", "", 1).strip()
         if not topic:
             return "Please provide a topic."
-        points = research_query_to_texts(topic, limit=8)
+        # optional: detect "N sentences/per slide"
+        msps = None
+        m = re.search(r"(\d{1,2})\s*(?:sentences?|per\s*slide)", cmd)
+        if m:
+            try:
+                msps = max(1, min(8, int(m.group(1))))
+            except Exception:
+                msps = None
+        points, sources = research_query_to_texts_with_sources(topic, limit=8)
         try:
-            path = _generate_pptx(f"{topic.title()} - Slides", points)
+            if msps:
+                path = _generate_pptx(f"{topic.title()} - Slides", points, max_sentences_per_slide=msps)
+            else:
+                path = _generate_pptx(f"{topic.title()} - Slides", points)
             rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
             url = f"/download/{rel}"
             speak("Slides ready. Opening the download link.")
-            return {"text": f"Generated slides for {topic}. Download: {url}", "action": "open_url", "url": url}
+            labeled = []
+            for u in sources:
+                try:
+                    d = urlparse(u).netloc or u
+                except Exception:
+                    d = u
+                labeled.append({"label": d, "url": u})
+            return {"text": f"Generated slides for {topic}. Download: {url}", "action": "open_url", "url": url, "sources": sources, "sources_labeled": labeled}
         except Exception as e:
             return f"Could not generate PPTX: {e}"
 
@@ -1317,6 +1337,28 @@ def research_query_to_texts(query: str, limit: int = 6):
         return parts[:limit] if parts else [text]
     return [str(text)]
 
+def research_query_to_texts_with_sources(query: str, limit: int = 6):
+    """Return (texts, sources_urls) using DDGS when available.
+    Falls back to research_query_to_texts without sources.
+    """
+    if DDGS is None:
+        return research_query_to_texts(query, limit=limit), []
+    texts = []
+    urls = []
+    try:
+        with DDGS() as ddgs:
+            for r in ddgs.text(query, max_results=limit):
+                body = (r.get("body") or "").strip()
+                href = (r.get("href") or "").strip()
+                if body:
+                    texts.append(body)
+                if href:
+                    urls.append(href)
+        # ensure bounded sizes
+        return texts[:limit] if texts else ["No results found."], urls[:limit]
+    except Exception:
+        return research_query_to_texts(query, limit=limit), []
+
 def save_docx_from_texts(title: str, bullets):
     if not Document:
         return None, "python-docx not installed."
@@ -1430,7 +1472,7 @@ def _generate_docx(title: str, bullets) -> str:
     doc.save(path)
     return path
 
-def _generate_pptx(title: str, bullets) -> str:
+def _generate_pptx(title: str, bullets, max_sentences_per_slide: int = 4) -> str:
     if not Presentation:
         raise RuntimeError("python-pptx not installed.")
     prs = Presentation()
@@ -1459,13 +1501,27 @@ def _generate_pptx(title: str, bullets) -> str:
         card.line.fill.background()
         return card
 
-    # helper to add a title textbox
+    # infer a simple icon from the title/topic and add title
+    def get_topic_icon(title_text: str) -> str:
+        t = (title_text or "").lower()
+        mapping = [
+            ("ai", "🤖"), ("machine learning", "🤖"), ("data", "📊"), ("analytics", "📈"),
+            ("climate", "🌍"), ("environment", "🌿"), ("biology", "🧬"), ("health", "🩺"),
+            ("medicine", "🧪"), ("finance", "💹"), ("marketing", "📣"), ("cloud", "☁️"),
+            ("security", "🔒"), ("python", "🐍"), ("java", "☕"), ("web", "🌐"),
+            ("quantum", "⚛️"), ("robot", "🤖"), ("network", "🌐"), ("database", "🗄️"),
+        ]
+        for k, e in mapping:
+            if k in t:
+                return e
+        return "✨"
+
     def add_title(slide, text, y=Inches(1.0)):
         tx = slide.shapes.add_textbox(Inches(1.1), y, prs.slide_width - Inches(2.2), Inches(1.2))
         tf = tx.text_frame
         tf.clear()
         p = tf.paragraphs[0]
-        p.text = text
+        p.text = f"{get_topic_icon(title)}  {text}"
         p.alignment = PP_ALIGN.LEFT
         run = p.runs[0]
         run.font.name = font_name
@@ -1474,9 +1530,21 @@ def _generate_pptx(title: str, bullets) -> str:
         run.font.color.rgb = palette["accent"]
         return tx
 
-    # helper to add bullet points in a textbox
-    def add_bullets(slide, items, top=Inches(2.1)):
-        tx = slide.shapes.add_textbox(Inches(1.1), top, prs.slide_width - Inches(2.2), prs.slide_height - top - Inches(1.0))
+    def add_icon_bullets(slide, count, top=Inches(2.1), left=Inches(0.95)):
+        line_h = Inches(0.42)
+        size = Inches(0.12)
+        for idx in range(count):
+            y = top + Inches(0.2) + line_h * idx
+            dot = slide.shapes.add_shape(MSO_SHAPE.OVAL, left, y, size, size)
+            dot.fill.solid()
+            dot.fill.fore_color.rgb = palette["accent"]
+            dot.line.fill.background()
+        return True
+
+    def add_bullets(slide, items, top=Inches(2.1), left=Inches(1.1), width=None):
+        if width is None:
+            width = prs.slide_width - Inches(2.2)
+        tx = slide.shapes.add_textbox(left, top, width, prs.slide_height - top - Inches(1.0))
         tf = tx.text_frame
         tf.clear()
         tf.word_wrap = True
@@ -1489,6 +1557,7 @@ def _generate_pptx(title: str, bullets) -> str:
             p.level = 0
             p.font.name = font_name
             p.font.size = Pt(22)
+        add_icon_bullets(slide, len(items), top, left - Inches(0.15))
         return tx
 
     # Cover slide
@@ -1513,32 +1582,74 @@ def _generate_pptx(title: str, bullets) -> str:
     srun.font.name = font_name
     srun.font.size = Pt(20)
 
-    # Content slides
-    chunk = []
-    for i, b in enumerate(bullets, 1):
-        chunk.append(b)
-        if len(chunk) >= 6 or i == len(bullets):
-            # randomize template variant per slide
-            slide_palette = random.choice(palettes)
-            layout = prs.slide_layouts[6] if len(prs.slide_layouts) > 6 else prs.slide_layouts[1]
-            s = prs.slides.add_slide(layout)
-            try:
-                s.background.fill.solid()
-                s.background.fill.fore_color.rgb = slide_palette["bg"]
-            except Exception:
-                pass
+    # Content slides: split into sentences and batch into slides
+    def split_sentences(text: str):
+        raw = [s.strip() for s in re.split(r"(?<=[.!?۔؟！。]|।)\s+", text) if s.strip()]
+        abbr = {"e.g.", "i.e.", "etc.", "mr.", "mrs.", "ms.", "dr.", "prof.", "sr.", "jr.", "vs.", "no.", "fig.", "al.", "u.s.", "u.k.", "dept.",
+                "inc.", "ltd.", "co.", "est.", "approx.", "misc.", "ref.", "ed.", "pp.", "vol.", "jan.", "feb.", "mar.", "apr.", "jun.", "jul.", "aug.", "sep.", "oct.", "nov.", "dec."}
+        merged = []
+        for seg in raw:
+            if merged and (merged[-1].lower().endswith(tuple(abbr)) or len(merged[-1]) <= 2 or re.search(r"\b[A-Z]\.\s*$", merged[-1])):
+                merged[-1] = (merged[-1] + " " + seg).strip()
+            else:
+                merged.append(seg)
+        return merged
 
-            variant = random.choice(["card", "accent_bar"])  # simple randomization
-            if variant == "accent_bar":
-                # left accent bar
-                bar = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), Inches(0.35), prs.slide_height)
-                bar.fill.solid()
-                bar.fill.fore_color.rgb = slide_palette["accent"]
-                bar.line.fill.background()
-            card = add_card(s, margin=Inches(0.6))
-            add_title(s, "Key Points", y=Inches(1.1))
+    all_sentences = []
+    for b in bullets:
+        # support list of paragraphs/snippets
+        all_sentences.extend(split_sentences(str(b)))
+
+    if max_sentences_per_slide <= 0:
+        max_sentences_per_slide = 4
+
+    # batch sentences into slides
+    for i in range(0, len(all_sentences), max_sentences_per_slide):
+        chunk = all_sentences[i:i + max_sentences_per_slide]
+        slide_palette = random.choice(palettes)
+        layout = prs.slide_layouts[6] if len(prs.slide_layouts) > 6 else prs.slide_layouts[1]
+        s = prs.slides.add_slide(layout)
+        try:
+            s.background.fill.solid()
+            s.background.fill.fore_color.rgb = slide_palette["bg"]
+        except Exception:
+            pass
+        variant = random.choice(["card", "accent_bar", "two_col", "image_text"])  # more variety
+        if variant == "accent_bar":
+            bar = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, Inches(0), Inches(0), Inches(0.35), prs.slide_height)
+            bar.fill.solid()
+            bar.fill.fore_color.rgb = slide_palette["accent"]
+            bar.line.fill.background()
+        card = add_card(s, margin=Inches(0.6))
+        add_title(s, "Key Points", y=Inches(1.1))
+        if variant == "two_col" and len(chunk) >= 2:
+            mid = (len(chunk) + 1) // 2
+            left_items = chunk[:mid]
+            right_items = chunk[mid:]
+            col_width = (prs.slide_width - Inches(2.2) - Inches(0.6)) / 2
+            add_bullets(s, left_items, top=Inches(2.2), left=Inches(1.1), width=col_width)
+            add_bullets(s, right_items, top=Inches(2.2), left=Inches(1.1) + col_width + Inches(0.6), width=col_width)
+        elif variant == "image_text":
+            # left image placeholder, right text
+            img_left = Inches(1.1)
+            img_top = Inches(2.2)
+            img_w = Inches(3.6)
+            img_h = Inches(3.0)
+            ph = s.shapes.add_shape(MSO_SHAPE.RECTANGLE, img_left, img_top, img_w, img_h)
+            ph.fill.solid()
+            ph.fill.fore_color.rgb = RGBColor(235, 240, 255)
+            ph.line.color.rgb = slide_palette["accent"]
+            txt = s.shapes.add_textbox(img_left, img_top + img_h + Inches(0.05), img_w, Inches(0.4))
+            ttf = txt.text_frame
+            ttf.clear()
+            tp = ttf.paragraphs[0]
+            tp.text = "Illustration"
+            tp.font.name = font_name
+            tp.font.size = Pt(12)
+            # bullets on right
+            add_bullets(s, chunk, top=Inches(2.2), left=img_left + img_w + Inches(0.6))
+        else:
             add_bullets(s, chunk, top=Inches(2.2))
-            chunk = []
 
     safe = "".join(ch for ch in title if ch.isalnum() or ch in (" ","_","-")).strip() or "slides"
     name = f"{safe[:40].replace(' ','_')}_{int(time.time())}.pptx"

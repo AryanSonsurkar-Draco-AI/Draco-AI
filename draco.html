@@ -418,6 +418,10 @@
           appendItem(t, 'bot');
           speakText(t);
         }
+        if (data && Array.isArray(data.sources_labeled) && data.sources_labeled.length) {
+          const list = data.sources_labeled.map(s => `<a href="${s.url}" target="_blank" rel="noopener noreferrer">${s.label}</a>`).join(' | ');
+          appendItem('Sources: ' + list, 'bot');
+        }
       } catch (e) {
         appendItem('Request failed. Please retry.', 'bot');
       }
@@ -531,6 +535,10 @@
         if (text) {
           appendItem(text, 'bot');
           speakText(text);
+        }
+        if (data && Array.isArray(data.sources_labeled) && data.sources_labeled.length) {
+          const list = data.sources_labeled.map(s => `<a href="${s.url}" target="_blank" rel="noopener noreferrer">${s.label}</a>`).join(' | ');
+          appendItem('Sources: ' + list, 'bot');
         }
       });
     } else {
