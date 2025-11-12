@@ -1,0 +1,6 @@
+Algebra: Isolate variables step-by-step; check solutions by substitution.
+Quadratics: ax^2 + bx + c = 0 -> x = (-b ± √(b^2 - 4ac)) / (2a). Factor when possible.
+Geometry: Draw a labeled diagram; use similar triangles, Pythagoras, and angle sum rules.
+Trigonometry: sin^2θ + cos^2θ = 1; SOH-CAH-TOA; use identities for simplification.
+Calculus: Derivatives as rate of change; integrals as area/accumulation. Start from definitions and common rules.
+Word problems: Define variables, translate to equations, solve, and interpret units.

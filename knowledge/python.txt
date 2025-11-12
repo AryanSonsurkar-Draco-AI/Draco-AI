@@ -1,0 +1,8 @@
+Basics: Variables (snake_case), types (int, float, str, bool), and f-strings for formatting.
+Control: if/elif/else; loops (for ... in, while) and enumerate/range for indices.
+Functions: def name(args): return value. Use docstrings and type hints when possible.
+Collections: list/tuple/set/dict. List comprehensions for concise transformations.
+Errors: try/except/else/finally; read the traceback to find the line and exception type.
+Modules: import standard libraries (math, os, json). Use venv and requirements.txt for deps.
+OOP: class, __init__, self, methods; dataclasses for simple containers.
+Testing: write small tests; print or use assert; isolate tricky parts.

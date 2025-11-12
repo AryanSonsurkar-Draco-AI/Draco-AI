@@ -90,6 +90,10 @@ except Exception:
     musicLibrary = None
 import requests
 import pytz
+try:
+    import draco_chat
+except Exception:
+    draco_chat = None
 
 ON_RENDER = os.environ.get("RENDER") is not None
 ON_SERVER = ON_RENDER or (os.environ.get("PORT") is not None) or (os.environ.get("RENDER_EXTERNAL_URL") is not None)
@@ -329,6 +333,7 @@ class Personality:
 
 memory = MemoryManager()
 personality = Personality()
+chat_ctx = draco_chat.ChatContext() if draco_chat else None
 
 # ------------- TTS (single speak implementation) -------------
 # On servers (Render/containers), avoid initializing pyttsx3 (needs eSpeak)
@@ -1230,6 +1235,28 @@ def process_command(raw_cmd: str) -> str:
         else:
             return f"Command error: {err}"
 
+    # Rule-based chat engine (self-contained, personalized)
+    if draco_chat and isinstance(cmd, str) and cmd:
+        user_email = get_logged_in_email()
+        profile = get_user_profile(user_email) if user_email else memory.long
+        try:
+            out = draco_chat.chat_reply(raw_cmd, profile, chat_ctx)
+            if isinstance(out, dict):
+                # persist profile if updated
+                if out.get("updated_profile") is not None:
+                    if user_email:
+                        set_user_profile(user_email, out["updated_profile"]) 
+                    else:
+                        # store minimal fields in memory fallback
+                        for k, v in out["updated_profile"].items():
+                            memory.set_pref(k, v)
+                text = str(out.get("text", ""))
+                if text:
+                    speak(text)
+                    return text
+        except Exception as e:
+            pass
+
     # fallback
     speak("I didn't get that. Try asking me to open apps, play music, take notes, set reminders or search the web.")
     return "Unknown command. Try: open youtube, play music, take note, set reminder, search for ..."
@@ -1268,6 +1295,14 @@ def api_profile():
     prof.update({k: v for k, v in data.items() if isinstance(k, str)})
     set_user_profile(email, prof)
     return {"ok": True, "profile": prof}
+
+@app.route("/api/profile/clear", methods=["POST"])
+def api_profile_clear():
+    email = get_logged_in_email()
+    if not email:
+        return {"ok": False, "error": "not_authenticated"}, 401
+    set_user_profile(email, {})
+    return {"ok": True}
 
 @app.route("/api/chat_history", methods=["GET"]) 
 def api_chat_history():
