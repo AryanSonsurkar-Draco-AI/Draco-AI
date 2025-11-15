@@ -104,6 +104,8 @@ os.environ["FLASK_SOCKETIO_ASYNC_MODE"] = "threading"
 app = Flask(__name__, static_folder=".", template_folder=".")
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-me")
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
+# Limit uploads to 20 MB
+app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
 
 # ------------- Global utilities & config -------------
 MEMORY_FILE = "memory.json"
@@ -1082,15 +1084,51 @@ def process_command(raw_cmd: str) -> str:
         topic = cmd.replace("generate pdf on ", "", 1).replace("create pdf on ", "", 1).strip()
         if not topic:
             return "Please provide a topic."
-        points = research_query_to_texts(topic, limit=12)
+        points, sources = research_query_to_texts_with_sources(topic, limit=12)
         try:
-            path = _generate_pdf(f"{topic.title()} - Report", points)
+            path = _generate_pdf(f"{topic.title()} - Report", points, sources=sources)
             rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
             url = f"/download/{rel}"
             speak("PDF ready. Opening the download link.")
-            return {"text": f"Generated PDF for {topic}. Download: {url}", "action": "open_url", "url": url}
+            # Label sources for UI too
+            labeled = []
+            for u in sources:
+                try:
+                    d = urlparse(u).netloc or u
+                except Exception:
+                    d = u
+                labeled.append({"label": d, "url": u})
+            return {"text": f"Generated PDF for {topic}. Download: {url}", "action": "open_url", "url": url, "sources": sources, "sources_labeled": labeled}
         except Exception as e:
             return f"Could not generate PDF: {e}"
+
+    if cmd.startswith("generate notes on ") or cmd.startswith("create notes on "):
+        topic = cmd.replace("generate notes on ", "", 1).replace("create notes on ", "", 1).strip()
+        if not topic:
+            return "Please provide a topic."
+        points, sources = research_query_to_texts_with_sources(topic, limit=10)
+        try:
+            # Build notes lines and append sources
+            lines = list(points)
+            if sources:
+                lines.append("")
+                lines.append("Sources:")
+                for s in sources:
+                    lines.append(s)
+            path = _generate_docx(f"{topic.title()} - Study Notes", lines)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            speak("Study notes ready. Opening the download link.")
+            labeled = []
+            for u in sources:
+                try:
+                    d = urlparse(u).netloc or u
+                except Exception:
+                    d = u
+                labeled.append({"label": d, "url": u})
+            return {"text": f"Generated notes for {topic}. Download: {url}", "action": "open_url", "url": url, "sources": sources, "sources_labeled": labeled}
+        except Exception as e:
+            return f"Could not generate Notes: {e}"
 
     # type text into active window
     if cmd.startswith("type "):
@@ -1415,7 +1453,10 @@ def research_query_to_texts_with_sources(query: str, limit: int = 6):
                 body = (r.get("body") or "").strip()
                 href = (r.get("href") or "").strip()
                 if body:
-                    texts.append(body)
+                    # de-duplicate by normalized snippet
+                    norm = " ".join(body.lower().split())
+                    if all(" ".join(t.lower().split()) != norm for t in texts):
+                        texts.append(body)
                 if href:
                     urls.append(href)
         # ensure bounded sizes
@@ -1522,6 +1563,111 @@ def _summarize_text(text: str, max_len: int = 1200) -> str:
         return "No content to summarize."
     s = " ".join(text.split())
     return s[:max_len] + ("…" if len(s) > max_len else "")
+
+def _split_sentences(text: str):
+    try:
+        parts = re.split(r"(?<=[.!?])\s+", text.strip())
+        return [p.strip() for p in parts if p and len(p.strip()) > 3]
+    except Exception:
+        return [text]
+
+def _extract_key_points(text: str, limit: int = 8):
+    sents = _split_sentences(text)
+    # heuristic: prefer sentences containing key verbs and shorter than 200 chars
+    keys = [" is ", " are ", " was ", " were ", " include ", " consists", " uses ", " means ", " defines ", " key ", " important "]
+    scored = []
+    for s in sents:
+        score = 0
+        ln = len(s)
+        score += max(0, 200 - ln) / 50.0
+        low = " " + s.lower() + " "
+        score += sum(1 for k in keys if k in low)
+        scored.append((score, s))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    pts = [s for _, s in scored[:max(1, limit)]]
+    return pts
+
+def _make_flashcards(text: str, limit: int = 8):
+    pts = _extract_key_points(text, limit=limit)
+    cards = []
+    for p in pts:
+        pl = p.strip().rstrip(".?!")
+        # Build simple Q from clause
+        q = "What is: " + (pl[:80] + ("…" if len(pl) > 80 else ""))
+        a = pl
+        cards.append({"q": q, "a": a})
+    return cards
+
+def _outline_text(text: str, max_sections: int = 6):
+    paras = [p.strip() for p in text.split("\n\n") if p.strip()]
+    outline = []
+    for i, p in enumerate(paras[:max_sections], 1):
+        title = _split_sentences(p)[0] if _split_sentences(p) else p[:60]
+        bullets = _extract_key_points(p, limit=5)
+        outline.append({"title": f"Section {i}: " + title[:60], "bullets": bullets})
+    return outline
+
+def _clean_text(text: str):
+    # normalize whitespace and remove duplicate consecutive lines
+    t = "\n".join([ln.strip() for ln in text.replace("\r\n", "\n").replace("\r", "\n").split("\n")])
+    lines = [ln for ln in t.split("\n") if ln]
+    out = []
+    last = None
+    for ln in lines:
+        if ln != last:
+            out.append(ln)
+            last = ln
+    return "\n".join(out)
+
+def _rewrite_tone(text: str, tone: str):
+    # Simple heuristic rewrites; non-LLM
+    t = text
+    tone = (tone or "").lower()
+    if tone == "simple":
+        # shorter sentences
+        sents = _split_sentences(t)
+        sents = [s.split(',')[0].strip() for s in sents]
+        return " ".join(sents)
+    if tone == "formal":
+        repl = {
+            " can't ": " cannot ",
+            " won't ": " will not ",
+            " it's ": " it is ",
+            " isn't ": " is not ",
+            " don't ": " do not ",
+            " doesn't ": " does not ",
+            " i'm ": " I am ",
+        }
+        low = " " + t
+        for k,v in repl.items():
+            low = low.replace(k, v)
+        return low.strip()
+    if tone == "academic":
+        # add connectors
+        sents = _split_sentences(t)
+        enh = []
+        for i, s in enumerate(sents):
+            prefix = "" if i == 0 else ("Furthermore, " if i % 2 else "Additionally, ")
+            enh.append(prefix + s)
+        return " ".join(enh)
+    return t
+
+def _extract_glossary(text: str, limit: int = 15):
+    # heuristic: terms before ':' or capitalized words sequences
+    terms = set()
+    for ln in text.split("\n"):
+        if ':' in ln:
+            k = ln.split(':',1)[0].strip()
+            if 2 <= len(k) <= 60:
+                terms.add(k)
+    words = re.findall(r"\b([A-Z][a-zA-Z]{2,}(?:\s+[A-Z][a-zA-Z]{2,})*)\b", text)
+    for w in words:
+        if 2 <= len(w) <= 40:
+            terms.add(w)
+    terms = list(terms)
+    terms.sort(key=lambda x: x.lower())
+    items = [f"{t}: " for t in terms[:limit]]
+    return items
 
 def _generate_docx(title: str, bullets) -> str:
     if not Document:
@@ -1753,13 +1899,21 @@ def _generate_pptx(title: str, bullets, max_sentences_per_slide: int = 4) -> str
     prs.save(path)
     return path
 
-def _generate_pdf(title: str, paragraphs) -> str:
+def _generate_pdf(title: str, paragraphs, sources=None) -> str:
     if not FPDF:
         raise RuntimeError("fpdf not installed.")
     class PDFReport(FPDF):
         def __init__(self, t: str):
             super().__init__()
             self.t = t
+            # theme colors (RGB)
+            self.theme = random.choice([
+                {"accent": (10, 163, 127), "muted": (100, 100, 120)},   # teal
+                {"accent": (62, 99, 221), "muted": (110, 110, 140)},   # blue
+                {"accent": (242, 95, 58), "muted": (130, 110, 110)},   # coral
+                {"accent": (45, 55, 72), "muted": (110, 110, 120)},    # slate
+            ])
+            self.section_links = []  # list of (text, link_id)
         def header(self):
             try:
                 self.set_font("Helvetica", "", 10)
@@ -1801,11 +1955,104 @@ def _generate_pdf(title: str, paragraphs) -> str:
     except Exception:
         pass
     pdf.ln(6)
+    # Table of Contents placeholder page (will add after cover)
+    # Create TOC after building section links; we'll add content links now and come back
+    # Prepare section link ids
+    section_link_ids = []
+    for idx, p in enumerate(paragraphs, 1):
+        try:
+            link_id = pdf.add_link()
+        except Exception:
+            link_id = None
+        section_link_ids.append((f"Section {idx}", link_id))
+
+    # Add content pages with section headers and set link targets
     pdf.set_text_color(0)
     pdf.set_font("Helvetica", "", 12)
-    for p in paragraphs:
+    for i, p in enumerate(paragraphs, 1):
+        # Section header
+        pdf.set_font("Helvetica", "B", 14)
+        r,g,b = pdf.theme.get("accent", (0,0,0))
+        pdf.set_text_color(r, g, b)
+        header = f"Section {i}"
+        y_before = pdf.get_y()
+        pdf.cell(0, 8, txt=header, ln=True)
+        # set link target for this section at current position
+        try:
+            if section_link_ids[i-1][1] is not None:
+                pdf.set_link(section_link_ids[i-1][1], y=y_before, page=pdf.page_no())
+        except Exception:
+            pass
+        pdf.set_text_color(0)
+        pdf.set_font("Helvetica", "", 12)
         pdf.multi_cell(0, 7, txt=str(p))
-        pdf.ln(1)
+        pdf.ln(2)
+
+    # Insert Table of Contents page after the cover page
+    try:
+        pdf.set_auto_page_break(auto=True, margin=18)
+        # Remember current state
+        saved_page = pdf.page
+        # Insert a page at position 2 (after cover)
+        pdf.page = 1
+        pdf._newpage("P")
+        pdf.page = 2
+        pdf.set_text_color(0)
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.cell(0, 10, txt="Table of Contents", ln=True)
+        pdf.ln(4)
+        pdf.set_font("Helvetica", "", 12)
+        for (label, link_id) in section_link_ids:
+            if link_id is not None:
+                pdf.set_text_color(0, 0, 180)
+                pdf.write(8, label, link=link_id)
+            else:
+                pdf.set_text_color(0)
+                pdf.cell(0, 8, txt=label, ln=True)
+            pdf.ln(2)
+        pdf.set_text_color(0)
+        # restore to last page to continue sources and save
+        pdf.page = saved_page + 1
+    except Exception:
+        # If insertion unsupported, just add TOC at the end
+        try:
+            pdf.add_page()
+            pdf.set_text_color(0)
+            pdf.set_font("Helvetica", "B", 16)
+            pdf.cell(0, 10, txt="Table of Contents", ln=True)
+            pdf.ln(4)
+            pdf.set_font("Helvetica", "", 12)
+            for (label, link_id) in section_link_ids:
+                if link_id is not None:
+                    pdf.set_text_color(0, 0, 180)
+                    pdf.write(8, label, link=link_id)
+                else:
+                    pdf.set_text_color(0)
+                    pdf.cell(0, 8, txt=label, ln=True)
+                pdf.ln(2)
+            pdf.set_text_color(0)
+        except Exception:
+            pass
+    # Sources section (clickable links)
+    if sources:
+        pdf.ln(4)
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.set_text_color(0)
+        pdf.cell(0, 10, txt="Sources", ln=True)
+        pdf.set_font("Helvetica", "", 11)
+        for u in sources:
+            try:
+                display = u
+                pdf.set_text_color(0, 0, 180)
+                pdf.write(6, display, link=u)
+                pdf.ln(6)
+            except Exception:
+                try:
+                    pdf.set_text_color(0)
+                    pdf.multi_cell(0, 6, txt=str(u))
+                except Exception:
+                    pass
+        pdf.set_text_color(0)
     safe = "".join(ch for ch in title if ch.isalnum() or ch in (" ","_","-")).strip() or "report"
     name = f"{safe[:40].replace(' ','_')}_{int(time.time())}.pdf"
     path = os.path.join(GENERATED_DIR, name)
@@ -1850,7 +2097,21 @@ def api_upload_process():
     # simple processing
     title = os.path.splitext(filename)[0]
     if "summarize" in instruction or "summary" in instruction:
-        summary = _summarize_text(text, max_len=1200)
+        # Support presets like summarize:short|medium|detailed
+        max_len = 1200
+        try:
+            if ":" in instruction:
+                _, kind = instruction.split(":", 1)
+                kind = (kind or "").strip().lower()
+                if kind == "short":
+                    max_len = 700
+                elif kind == "medium":
+                    max_len = 1200
+                elif kind == "detailed":
+                    max_len = 2200
+        except Exception:
+            pass
+        summary = _summarize_text(text, max_len=max_len)
         try:
             out = _generate_docx(f"Summary of {title}", [summary])
             rel = os.path.relpath(out, os.getcwd()).replace("\\", "/")
@@ -1894,6 +2155,79 @@ def api_upload_process():
         except Exception:
             return {"ok": True, "text": str(results)[:3000]}
 
+    if "keypoints" in instruction or "key points" in instruction:
+        pts = _extract_key_points(text, limit=10)
+        preview = "\n".join(f"- {p}" for p in pts)
+        try:
+            out = _generate_docx(f"Key Points - {title}", pts)
+            rel = os.path.relpath(out, os.getcwd()).replace("\\", "/")
+            return {"ok": True, "text": preview[:3000], "doc": f"/download/{rel}"}
+        except Exception:
+            return {"ok": True, "text": preview[:3000]}
+
+    if "flashcards" in instruction or "cards" in instruction:
+        cards = _make_flashcards(text, limit=10)
+        preview = "\n\n".join([f"Q: {c['q']}\nA: {c['a']}" for c in cards])
+        try:
+            # Save as Q/A lines in DOCX
+            lines = []
+            for c in cards:
+                lines.append(f"Q: {c['q']}")
+                lines.append(f"A: {c['a']}")
+                lines.append("")
+            out = _generate_docx(f"Flashcards - {title}", lines)
+            rel = os.path.relpath(out, os.getcwd()).replace("\\", "/")
+            return {"ok": True, "text": preview[:3000], "cards": cards, "doc": f"/download/{rel}"}
+        except Exception:
+            return {"ok": True, "text": preview[:3000], "cards": cards}
+
+    if "outline" in instruction:
+        outline = _outline_text(text, max_sections=6)
+        flat = []
+        for sec in outline:
+            flat.append(sec["title"]) 
+            flat.extend(["  - " + b for b in sec["bullets"]])
+            flat.append("")
+        preview = "\n".join(flat)
+        try:
+            out = _generate_docx(f"Outline - {title}", flat)
+            rel = os.path.relpath(out, os.getcwd()).replace("\\", "/")
+            return {"ok": True, "text": preview[:3000], "doc": f"/download/{rel}"}
+        except Exception:
+            return {"ok": True, "text": preview[:3000]}
+
+    if "clean" in instruction or "cleanup" in instruction:
+        cleaned = _clean_text(text)
+        try:
+            out = _generate_docx(f"Cleaned - {title}", [cleaned])
+            rel = os.path.relpath(out, os.getcwd()).replace("\\", "/")
+            return {"ok": True, "text": cleaned[:3000], "doc": f"/download/{rel}"}
+        except Exception:
+            return {"ok": True, "text": cleaned[:3000]}
+
+    if instruction.startswith("rewrite:") or instruction.startswith("tone:"):
+        try:
+            tone = instruction.split(":",1)[1].strip().lower()
+        except Exception:
+            tone = ""
+        rewritten = _rewrite_tone(text, tone)
+        try:
+            out = _generate_docx(f"Rewritten ({tone or 'neutral'}) - {title}", [rewritten])
+            rel = os.path.relpath(out, os.getcwd()).replace("\\", "/")
+            return {"ok": True, "text": rewritten[:3000], "doc": f"/download/{rel}"}
+        except Exception:
+            return {"ok": True, "text": rewritten[:3000]}
+
+    if "glossary" in instruction:
+        items = _extract_glossary(text, limit=20)
+        preview = "\n".join(items)
+        try:
+            out = _generate_docx(f"Glossary - {title}", items)
+            rel = os.path.relpath(out, os.getcwd()).replace("\\", "/")
+            return {"ok": True, "text": preview[:3000], "doc": f"/download/{rel}"}
+        except Exception:
+            return {"ok": True, "text": preview[:3000]}
+
     # default: return content and optionally repackage to docx
     try:
         out = _generate_docx(f"Processed - {title}", [text[:6000]])
@@ -1904,6 +2238,140 @@ def api_upload_process():
 
 
 
+def _extract_text_auto(path: str) -> str:
+    ext = os.path.splitext(path)[1].lower()
+    if ext == ".docx":
+        return _extract_text_from_docx(path)
+    if ext == ".pptx":
+        return _extract_text_from_pptx(path)
+    if ext == ".pdf":
+        return _extract_text_from_pdf(path)
+    return ""
+
+def _sentences_set(text: str):
+    sents = _split_sentences(text)
+    # normalize
+    return set([" ".join(s.lower().split()) for s in sents if s.strip()])
+
+@app.route("/api/compare", methods=["POST"])
+def api_compare():
+    try:
+        fA = request.files.get("fileA")
+        fB = request.files.get("fileB")
+        out_fmt = (request.form.get("format") or "both").lower()
+        if not fA or not fB:
+            return {"ok": False, "error": "need_two_files"}, 400
+        nameA = secure_filename(fA.filename or "A")
+        nameB = secure_filename(fB.filename or "B")
+        pA = os.path.join(UPLOADS_DIR, f"cmp_A_{int(time.time())}_{nameA}")
+        pB = os.path.join(UPLOADS_DIR, f"cmp_B_{int(time.time())}_{nameB}")
+        fA.save(pA); fB.save(pB)
+        tA = _extract_text_auto(pA)
+        tB = _extract_text_auto(pB)
+        if not tA and not tB:
+            return {"ok": False, "error": "no_text_in_files"}, 400
+        setA = _sentences_set(tA)
+        setB = _sentences_set(tB)
+        onlyA = [s for s in setA - setB][:20]
+        onlyB = [s for s in setB - setA][:20]
+        common = [s for s in setA & setB][:20]
+        # Build preview and lines
+        title = f"Compare - {os.path.splitext(nameA)[0]} vs {os.path.splitext(nameB)[0]}"
+        lines = []
+        lines.append("Summary:")
+        lines.append(f"Only in {nameA}: {len(onlyA)}")
+        lines.append(f"Only in {nameB}: {len(onlyB)}")
+        lines.append(f"Common: {len(common)}")
+        lines.append("")
+        lines.append(f"Only in {nameA}:")
+        lines += [" - " + s for s in onlyA]
+        lines.append("")
+        lines.append(f"Only in {nameB}:")
+        lines += [" - " + s for s in onlyB]
+        lines.append("")
+        lines.append("Common Points:")
+        lines += [" - " + s for s in common]
+        lines.append("")
+        # unified notes as key points from both texts
+        uni = _extract_key_points((tA + "\n\n" + tB)[:16000], limit=12)
+        lines.append("Unified Notes:")
+        lines += [" - " + s for s in uni]
+        preview = "\n".join(lines[:60])
+        out = {"ok": True, "preview": preview[:3000]}
+        if out_fmt in ("docx", "both"):
+            try:
+                doc_path = _generate_docx(title, lines)
+                rel = os.path.relpath(doc_path, os.getcwd()).replace("\\", "/")
+                out["doc"] = f"/download/{rel}"
+            except Exception:
+                pass
+        if out_fmt in ("pdf", "both"):
+            try:
+                pdf_path = _generate_pdf(title, lines)
+                rel = os.path.relpath(pdf_path, os.getcwd()).replace("\\", "/")
+                out["pdf"] = f"/download/{rel}"
+            except Exception:
+                pass
+        return out
+    except Exception as e:
+        return {"ok": False, "error": str(e)}, 500
+
+@app.route("/api/merge", methods=["POST"])
+def api_merge():
+    try:
+        out_fmt = (request.form.get("format") or "both").lower()
+        # accept files as file1,file2,... or multiple under 'files'
+        files = []
+        if "files" in request.files:
+            files = request.files.getlist("files")
+        else:
+            for i in range(1, 8):
+                f = request.files.get(f"file{i}")
+                if f: files.append(f)
+        if len(files) < 2:
+            return {"ok": False, "error": "need_two_or_more_files"}, 400
+        merged_lines = []
+        refs = []
+        for idx, f in enumerate(files, 1):
+            nm = secure_filename(f.filename or f"file{idx}")
+            p = os.path.join(UPLOADS_DIR, f"merge_{int(time.time())}_{idx}_{nm}")
+            f.save(p)
+            txt = _extract_text_auto(p)
+            refs.append(nm)
+            if txt:
+                merged_lines.append(f"=== {nm} ===")
+                pts = _extract_key_points(txt, limit=12)
+                merged_lines += [" - " + s for s in pts]
+                merged_lines.append("")
+        if not merged_lines:
+            return {"ok": False, "error": "no_text_in_files"}, 400
+        # De-dup lines
+        seen = set(); uniq = []
+        for ln in merged_lines:
+            norm = " ".join(ln.lower().split())
+            if norm in seen: continue
+            seen.add(norm); uniq.append(ln)
+        uniq.append(""); uniq.append("References:")
+        uniq += [" - " + r for r in refs]
+        title = "Merged Report"
+        out = {"ok": True, "preview": "\n".join(uniq[:80])[:3000]}
+        if out_fmt in ("docx", "both"):
+            try:
+                doc_path = _generate_docx(title, uniq)
+                rel = os.path.relpath(doc_path, os.getcwd()).replace("\\", "/")
+                out["doc"] = f"/download/{rel}"
+            except Exception:
+                pass
+        if out_fmt in ("pdf", "both"):
+            try:
+                pdf_path = _generate_pdf(title, uniq)
+                rel = os.path.relpath(pdf_path, os.getcwd()).replace("\\", "/")
+                out["pdf"] = f"/download/{rel}"
+            except Exception:
+                pass
+        return out
+    except Exception as e:
+        return {"ok": False, "error": str(e)}, 500
 @app.route("/api/echo", methods=["POST"])
 def api_echo():
     data = request.json or {}
