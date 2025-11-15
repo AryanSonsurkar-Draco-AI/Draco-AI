@@ -1,4 +1,4 @@
-<!doctype html>
+ <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
@@ -28,22 +28,22 @@
     .status { display:flex; align-items:center; gap:8px; color: var(--muted); font-size: 14px; margin-bottom: 14px; }
     .dot { width:10px; height:10px; border-radius:50%; background:#ff5c5c; }
     .dot.on { background:#25ff9b; }
-    .card { position:relative; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
-    .row { display: flex; gap: 10px; }
-    .input { display:flex; gap:10px; align-items:center; padding:10px; border-radius: 12px; border:1px solid var(--line); background:#151236; }
-    input[type=text] { flex: 1; padding: 12px; border-radius: 10px; border: none; outline: none; background: transparent; color: var(--text); font-size: 15px; }
+    .card { position:relative; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.24); }
+    .row { display: flex; gap: 12px; }
+    .input { display:flex; gap:10px; align-items:center; padding:10px; border-radius: 10px; border:1px solid var(--line); background:#0f1218; }
+    input[type=text] { flex: 1; padding: 12px; border-radius: 8px; border: none; outline: none; background: transparent; color: var(--text); font-size: 15px; }
     /* Ensure file input stays within sidebar width */
     input[type=file].input { display:block; width:100%; padding:10px; background:#151236; border:1px solid var(--line); border-radius:10px; color:var(--text); }
     input[type=file].input::file-selector-button { background: var(--accent); color:#fff; border:none; padding:8px 10px; border-radius:8px; margin-right:10px; cursor:pointer; }
     input[type=file].input::-webkit-file-upload-button { background: var(--accent); color:#fff; border:none; padding:8px 10px; border-radius:8px; margin-right:10px; cursor:pointer; }
-    .btn { padding: 12px 14px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; transition: transform .08s ease, box-shadow .15s ease, filter .15s ease; }
-    .btn:hover { filter: brightness(.95); transform: translateY(-1px); }
+    .btn { padding: 10px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,.06); background: var(--accent); color: #fff; cursor: pointer; transition: transform .08s ease, box-shadow .15s ease, filter .15s ease; box-shadow: 0 2px 10px rgba(0,0,0,.18); }
+    .btn:hover { filter: brightness(.98); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,.24); }
     .btn:disabled { opacity:.55; cursor:not-allowed; filter: grayscale(.3); }
-    .chipbar { display:flex; flex-wrap: wrap; gap:8px; margin-top:10px; }
-    .chip { padding:8px 12px; border-radius: 999px; border:1px solid var(--line); color:#d9d3ff; background: #17143a; cursor:pointer; }
-    .chip:hover { background:#1b1746; }
+    .chipbar { display:flex; flex-wrap: wrap; gap:10px; margin-top:10px; }
+    .chip { padding:8px 12px; border-radius: 999px; border:1px solid var(--line); color:#c8d0df; background: #0f1218; cursor:pointer; }
+    .chip:hover { background:#121623; }
     .log { margin-top: 16px; max-height: 520px; overflow: auto; padding-right: 4px; }
-    .item { background:#151236; border:1px solid var(--line); border-radius: 12px; padding:12px; margin:10px 0; }
+    .item { background:#0f1218; border:1px solid var(--line); border-radius: 12px; padding:12px; margin:12px 0; }
     /* Bot replies: darker than user for contrast */
     body.light-mode .item.bot-item { background: linear-gradient(180deg, #e75a00, #c73d00); border-color: rgba(200,90,30,.7); }
     body.light-mode .item.bot-item .bot { color:#ffffff; }
@@ -59,8 +59,9 @@
     }
 
     /* Dark mode: make bot bubbles slightly darker than user */
-    body.dark-mode .item.user-item { background: #151236; border-color: var(--line); }
-    body.dark-mode .item.bot-item { background: #0f0b2a; border-color: rgba(90,70,160,.6); }
+    /* Dark mode: make bot bubbles slightly darker than user */
+    body.dark-mode .item.user-item { background: #0f1218; border-color: var(--line); }
+    body.dark-mode .item.bot-item { background: #0f1218; border-color: rgba(100,110,140,.35); }
     body.dark-mode .item.bot-item .bot, body.dark-mode .item.user-item .user { color: var(--text); }
     .user { color:#b7a7ff; }
     .bot { color:#9bf0e2; }
@@ -145,6 +146,26 @@
     body.light-mode .chip { color: var(--text); }
     /* Make upload status clearly visible in light mode */
     body.light-mode #uploadNote { color: #ff0000 !important; }
+    /* Drop zone & progress */
+    .dropzone { border:2px dashed var(--line); border-radius:12px; padding:12px; text-align:center; color:var(--muted); transition: background .2s ease, border-color .2s ease; }
+    .dropzone.dragover { background: rgba(255, 170, 0, 0.08); border-color: var(--accent-2); }
+    .progress { width:100%; height:8px; background: rgba(255,255,255,.15); border-radius:6px; overflow:hidden; margin-top:8px; }
+    .progress > span { display:block; height:100%; width:0%; background: var(--accent-2); transition: width .15s linear; }
+    /* Animations */
+    .fade-in { animation: fadeIn .28s ease-out both; }
+    .slide-up { animation: slideUp .28s ease-out both; }
+    @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+    @keyframes slideUp { from { transform: translateY(8px); opacity:0 } to { transform: translateY(0); opacity:1 } }
+    /* Skeletons */
+    .skeleton { position: relative; overflow: hidden; background: linear-gradient(90deg, rgba(255,255,255,0.06), rgba(255,255,255,0.14), rgba(255,255,255,0.06)); background-size: 200% 100%; animation: shimmer 1.2s infinite; border-radius: 10px; }
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+    .skeleton.text { height: 14px; margin: 6px 0; }
+    .skeleton.block { height: 64px; margin: 10px 0; }
+    /* Error banner */
+    .error-banner { display:none; padding:10px; border:1px solid rgba(220,40,40,.6); background: rgba(220,40,40,.15); color:#ffb6b6; border-radius:10px; margin-bottom:10px; gap:8px; align-items:center; }
+    body.light-mode .error-banner { background:#ffecec; border-color:#ff6b6b; color:#b30000; }
+    .error-actions { display:flex; gap:8px; margin-left:auto; }
+    .pill { border:1px solid var(--line); padding:6px 12px; border-radius:999px; background:rgba(255,255,255,.06); }
 
     /* Sidebar glass */
     .side { background: var(--card); backdrop-filter: blur(12px); box-shadow: 0 0 24px rgba(0,0,0,.25), inset 0 0 0 1px var(--line); }
@@ -160,7 +181,9 @@
     body.light-mode .btn:hover { box-shadow: 0 0 22px rgba(255, 160, 60, .55); }
     body.dark-mode .btn:hover { box-shadow: 0 0 22px rgba(120, 100, 255, .55); }
 
-    /* Flame particle system */
+    /* Hide decorative flames for professional look */
+    .flames { display:none !important; }
+    /* Flame particle system (disabled) */
     @keyframes flameRise {
       0% { transform: translateY(0) scale(1); opacity: .9; }
       50% { opacity: 1; }
@@ -231,13 +254,7 @@
   </style>
 </head>
 <body>
-  <div class="flames" aria-hidden="true">
-    <div class="flame"></div>
-    <div class="flame f2"></div>
-    <div class="flame f3"></div>
-    <div class="flame"></div>
-    <div class="flame f2"></div>
-  </div>
+  <div class="flames" aria-hidden="true"></div>
   <div class="wrap">
     <h1>Draco Assistant</h1>
     <div class="status"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
@@ -248,8 +265,8 @@
     <div class="layout" id="layout">
       <div class="side" id="sidebar">
         <div class="profile">
-          <div class="avatar" id="avatar">
-            <img id="dracoLogo" src="/static/draco-logo.jpg" alt="Draco Logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';" />
+          <div class="avatar" id="avatar" style="width:72px; height:72px;">
+            <img id="dracoLogo" src="/static/Draco%20AI%20logo.jpg" alt="Draco Logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';" />
             <div class="fallback" style="display:none;">D</div>
           </div>
           <div class="meta" style="text-align:center;">
@@ -268,6 +285,9 @@
             <input id="instruction" type="text" class="input" placeholder="Instruction (optional, e.g., summarize)" style="display:none;" />
             <div class="button-container"><button class="btn" id="chooseFileBtn" style="width:100%;">Choose File</button></div>
             <div class="button-container"><button class="btn" id="uploadBtn" style="width:100%;">Upload File</button></div>
+            <div id="dropZone" class="dropzone">Drag & Drop file here</div>
+            <div class="progress" id="uploadProgress" style="display:none;"><span></span></div>
+            <div id="uploadStep" style="font-size:12px; color:var(--muted); margin-top:4px;"></div>
             <div class="themeToggle" style="margin-top:4px;">
               <div style="font-weight:600;">Theme</div>
               <div class="toggleSwitch" style="display:flex; align-items:center; gap:8px;">
@@ -278,6 +298,7 @@
               </div>
             </div>
             <div id="fileNameLabel" style="margin-top:2px; color:var(--muted); font-size:13px;"></div>
+            <div id="fileSizeLabel" style="color:var(--muted); font-size:12px;"></div>
             <div id="uploadNote" style="margin-top:4px; color:var(--muted); font-size:13px;"></div>
           </div>
         </div>
@@ -292,6 +313,13 @@
         </div>
       </div>
       <div class="card">
+        <div id="errorBanner" class="error-banner">
+          <span id="errorText">Something went wrong.</span>
+          <div class="error-actions">
+            <button class="btn" id="copyErrorBtn">Copy Log</button>
+            <button class="btn" id="retryBtn">Retry</button>
+          </div>
+        </div>
         <div class="input" style="margin-bottom:10px;">
           <input id="input" type="text" placeholder="Type a command (e.g., open youtube, play music, take note ...)" />
           <button class="btn" id="sendBtn">Send</button>
@@ -310,11 +338,24 @@
         </div>
         <div class="log" id="log"></div>
         <small>Tip: Try "open youtube", "play music", "list notes", "remind me to drink water at 19:30"</small>
+        <div class="chipbar" id="summaryChips" style="margin-top:10px;">
+          <div class="chip pill" data-summary="short">Summary: Short</div>
+          <div class="chip pill" data-summary="medium">Summary: Medium</div>
+          <div class="chip pill" data-summary="detailed">Summary: Detailed</div>
+        </div>
         <div class="chipbar" id="fileChips" style="margin-top:10px;">
           <div class="chip" data-instruction="summarize">Summarize File</div>
           <div class="chip" data-instruction="shorten">Shorten File</div>
           <div class="chip" data-instruction="lengthen">Lengthen File</div>
           <div class="chip" data-instruction="search">Search Web For Same</div>
+        </div>
+        <div class="chipbar" id="workflowChips" style="margin-top:10px;">
+          <div class="chip pill" data-action="compare">Compare Files</div>
+          <div class="chip pill" data-action="merge">Merge Files</div>
+        </div>
+        <div class="card" style="margin-top:12px;">
+          <div style="font-weight:600; margin-bottom:8px;">Generated Downloads</div>
+          <div id="downloadsPanel" style="font-size:14px; display:flex; flex-direction:column; gap:6px;"></div>
         </div>
       </div>
     </div>
@@ -329,6 +370,26 @@
     const stopSpeakBtn = document.getElementById('stopSpeakBtn');
     const dot = document.getElementById('dot');
     const statusText = document.getElementById('statusText');
+    // Error banner helpers (moved from top)
+    const errorBanner = document.getElementById('errorBanner');
+    const errorText = document.getElementById('errorText');
+    const copyErrorBtn = document.getElementById('copyErrorBtn');
+    const retryBtn = document.getElementById('retryBtn');
+    let lastAction = null; // function to retry
+    function showError(msg, retryFn){
+      if (!errorBanner) return;
+      errorText.textContent = msg || 'Something went wrong.';
+      errorBanner.style.display = 'flex';
+      errorBanner.classList.add('slide-up');
+      lastAction = typeof retryFn === 'function' ? retryFn : null;
+    }
+    function hideError(){ if (errorBanner) errorBanner.style.display = 'none'; }
+    if (copyErrorBtn) copyErrorBtn.onclick = async ()=>{ try{ await navigator.clipboard.writeText(errorText.textContent||''); }catch(e){} };
+    if (retryBtn) retryBtn.onclick = ()=>{ hideError(); if (lastAction) lastAction(); };
+
+    // Busy state helpers
+    const allButtons = ()=> Array.from(document.querySelectorAll('button.btn'));
+    function setBusy(on){ allButtons().forEach(b=> b.disabled = !!on); }
 
     let socket = null;
     let user = { logged_in: false, email: null, profile: {} };
@@ -344,6 +405,7 @@
       const el = document.createElement('div');
       el.className = 'item ' + (who === 'bot' ? 'bot-item' : 'user-item');
       el.innerHTML = `<div class="${who}">${text}</div>`;
+      el.classList.add('fade-in');
       log.appendChild(el);
       log.scrollTop = log.scrollHeight;
     }
@@ -427,9 +489,10 @@
     async function sendCommand(text) {
       if (!text) return;
       appendItem(text, 'user');
+      hideError(); setBusy(true);
       // Prefer socket if connected
       if (socket && socket.connected) {
-        try { socket.emit('user_command', { text }); return; } catch (e) {}
+        try { socket.emit('user_command', { text }); setBusy(false); return; } catch (e) { setBusy(false); }
       }
       // Fallback to HTTP
       try {
@@ -438,6 +501,7 @@
           body: JSON.stringify({ text })
         });
         const data = await r.json();
+        setBusy(false);
         if (data && data.action === 'open_url' && data.url) {
           try { window.open(data.url, '_blank'); } catch (e) {}
         }
@@ -451,6 +515,8 @@
           appendItem('Sources: ' + list, 'bot');
         }
       } catch (e) {
+        setBusy(false);
+        showError('Request failed. Please retry.', ()=> sendCommand(text));
         appendItem('Request failed. Please retry.', 'bot');
       }
     }
@@ -668,6 +734,11 @@
     const uploadNote = document.getElementById('uploadNote');
     const chooseFileBtn = document.getElementById('chooseFileBtn');
     const fileNameLabel = document.getElementById('fileNameLabel');
+    const dropZone = document.getElementById('dropZone');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const downloadsPanel = document.getElementById('downloadsPanel');
+    const uploadStep = document.getElementById('uploadStep');
+    let droppedFile = null;
     if (chooseFileBtn) {
       chooseFileBtn.onclick = () => { fileInput.click(); };
     }
@@ -676,32 +747,88 @@
         try {
           const f = fileInput.files && fileInput.files[0];
           fileNameLabel.textContent = f ? ('Selected: ' + f.name) : '';
+          droppedFile = null;
+          if (f) fileSizeLabel.textContent = (Math.round(f.size/1024)/1024).toFixed(2) + ' MB'; else fileSizeLabel.textContent='';
         } catch (e) {}
       };
     }
+    if (dropZone) {
+      ['dragenter','dragover'].forEach(ev => dropZone.addEventListener(ev, (e)=>{ e.preventDefault(); dropZone.classList.add('dragover'); }));
+      ;['dragleave','drop'].forEach(ev => dropZone.addEventListener(ev, (e)=>{ e.preventDefault(); dropZone.classList.remove('dragover'); }));
+      dropZone.addEventListener('drop', (e) => {
+        const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) {
+          droppedFile = f;
+          fileNameLabel.textContent = 'Selected (dropped): ' + f.name;
+          fileSizeLabel.textContent = (Math.round(f.size/1024)/1024).toFixed(2) + ' MB';
+        }
+      });
+    }
     uploadBtn.onclick = async () => {
       uploadNote.textContent = 'Processing...';
-      const f = fileInput.files && fileInput.files[0];
+      hideError(); setBusy(true);
+      if (uploadStep) uploadStep.textContent = 'Uploading…';
+      const f = (fileInput.files && fileInput.files[0]) || droppedFile;
       if (!f) { uploadNote.textContent = 'Please choose a file.'; return; }
       const fd = new FormData();
       fd.append('file', f);
       fd.append('instruction', (instructionEl.value||'').trim());
       try {
-        const r = await fetch('/api/upload_process', { method:'POST', body: fd });
-        const j = await r.json();
-        if (!j.ok) { uploadNote.textContent = 'Error: ' + (j.error||'failed'); return; }
-        let msg = '';
-        if (j.summary) msg += 'Summary:\n' + j.summary + '\n';
-        if (j.text) msg += 'Text:\n' + j.text + '\n';
-        appendItem(msg || 'Processed.', 'bot');
-        if (j.doc) {
-          const a = document.createElement('a');
-          a.href = j.doc; a.target = '_blank'; a.textContent = 'Download processed file';
-          uploadNote.innerHTML = ''; uploadNote.appendChild(a);
-        } else {
-          uploadNote.textContent = 'Done.';
-        }
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/upload_process');
+        if (uploadProgress) uploadProgress.style.display = 'block';
+        const bar = uploadProgress ? uploadProgress.querySelector('span') : null;
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable && bar) {
+            const pct = Math.min(100, Math.round((e.loaded / e.total) * 100));
+            bar.style.width = pct + '%';
+          }
+        };
+        xhr.onload = () => {
+          if (uploadProgress) { uploadProgress.style.display = 'none'; if (bar) bar.style.width = '0%'; }
+          try {
+            if (uploadStep) uploadStep.textContent = 'Processing…';
+            const j = JSON.parse(xhr.responseText || '{}');
+            if (!j.ok) { uploadNote.textContent = 'Error: ' + (j.error||'failed'); return; }
+            let msg = '';
+            if (j.summary) msg += 'Summary:\n' + j.summary + '\n';
+            if (j.text) msg += 'Text:\n' + j.text + '\n';
+            appendItem(msg || 'Processed.', 'bot');
+            if (j.doc) {
+              const a = document.createElement('a');
+              a.href = j.doc; a.target = '_blank'; a.textContent = 'Download processed file';
+              uploadNote.innerHTML = ''; uploadNote.appendChild(a);
+              if (downloadsPanel) {
+                const li = document.createElement('div');
+                const when = new Date().toLocaleString();
+                li.innerHTML = `<a href="${j.doc}" target="_blank">${when} - ${f.name}</a>`;
+                downloadsPanel.prepend(li);
+              }
+            } else {
+              uploadNote.textContent = 'Done.';
+            }
+            if (uploadStep) uploadStep.textContent = '';
+            setBusy(false);
+          } catch (e) {
+            setBusy(false);
+            if (uploadStep) uploadStep.textContent = '';
+            showError('Upload failed.', ()=> uploadBtn.click());
+            uploadNote.textContent = 'Upload failed.';
+          }
+        };
+        xhr.onerror = () => {
+          if (uploadProgress) uploadProgress.style.display = 'none';
+          if (uploadStep) uploadStep.textContent = '';
+          setBusy(false);
+          showError('Upload failed.', ()=> uploadBtn.click());
+          uploadNote.textContent = 'Upload failed.';
+        };
+        xhr.send(fd);
       } catch (e) {
+        if (uploadProgress) uploadProgress.style.display = 'none';
+        if (uploadStep) uploadStep.textContent = '';
+        setBusy(false);
+        showError('Upload failed.', ()=> uploadBtn.click());
         uploadNote.textContent = 'Upload failed.';
       }
     };
@@ -789,6 +916,30 @@
         uploadBtn.click();
       });
     }
+
+    // Summary length presets (no external API needed)
+    const summaryChips = document.getElementById('summaryChips');
+    if (summaryChips) {
+      summaryChips.addEventListener('click', (e) => {
+        const t = e.target.closest('.chip');
+        if (!t) return;
+        const kind = t.getAttribute('data-summary');
+        if (instructionEl) instructionEl.value = `summarize:${kind}`;
+        const f = (fileInput.files && fileInput.files[0]) || droppedFile;
+        if (!f) { uploadNote.textContent = 'Please choose a file first.'; return; }
+        uploadBtn.click();
+      });
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key.toLowerCase() === 'k') { e.preventDefault(); try { document.getElementById('input').focus(); } catch(_){} }
+      if (e.altKey && (e.key.toLowerCase() === 'u')) { e.preventDefault(); chooseFileBtn && chooseFileBtn.click(); }
+      if (e.altKey && (e.key.toLowerCase() === 's')) { e.preventDefault(); if (instructionEl) instructionEl.value = 'summarize:short'; uploadBtn && uploadBtn.click(); }
+      if (e.altKey && (e.key.toLowerCase() === 'p')) { e.preventDefault(); const t = (document.getElementById('genTopicSide').value||'').trim(); if (t) sendCommand('generate pdf on ' + t); }
+      if (e.altKey && (e.key.toLowerCase() === 'd')) { e.preventDefault(); const t = (document.getElementById('genTopicSide').value||'').trim(); if (t) sendCommand('generate doc on ' + t); }
+      if (e.altKey && (e.key.toLowerCase() === 'f')) { e.preventDefault(); if (instructionEl) instructionEl.value = 'flashcards'; uploadBtn && uploadBtn.click(); }
+    });
   </script>
 </body>
 </html>
