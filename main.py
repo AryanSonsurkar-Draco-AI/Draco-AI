@@ -1311,6 +1311,24 @@ def guest_mode():
     # Guest mode (login removed) – just serve app
     return send_from_directory(".", "draco.html")
 
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.json or {}
+    email = (data.get("email") or "").strip().lower()
+    if not email or "@" not in email:
+        return {"ok": False, "error": "invalid_email"}, 400
+    session["user_email"] = email
+    session.pop("chat_id", None)
+    return {"ok": True, "email": email}
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    session.pop("user_email", None)
+    session.pop("chat_id", None)
+    return {"ok": True}
+
+
 @app.route("/me")
 def me():
     email = get_logged_in_email()
@@ -2453,7 +2471,7 @@ if not ON_RENDER:
                         res = process_command(cmd)
                         speak(res)
                     except Exception:
-                        speak("I couldn't understand. Try again.")
+                        speak("I couldn't understand. Try again.") 
         except Exception as e:
             print("Voice loop error:", e)
             time.sleep(1)

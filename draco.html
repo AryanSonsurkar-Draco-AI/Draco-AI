@@ -19,19 +19,23 @@
       --line: #2b2753;
     }
     * { box-sizing: border-box; }
+    html, body { overflow-x: hidden; }
     body { font-family: 'Poppins', 'Inter', system-ui, Arial, sans-serif; margin: 0; color: var(--text);
       background: linear-gradient(180deg, var(--bg-start), var(--bg-end));
       min-height: 100dvh;
+      display:flex;
+      flex-direction:column;
+      width:100%;
     }
-    .wrap { max-width: 1100px; margin: 32px auto; padding: 0 18px; }
+    .wrap { flex:1; width:100%; margin: 0; padding: 8px 16px 16px; display:flex; flex-direction:column; }
     h1 { font-size: 30px; margin: 0 0 10px; letter-spacing: 0.4px; }
     .status { display:flex; align-items:center; gap:8px; color: var(--muted); font-size: 14px; margin-bottom: 14px; }
     .dot { width:10px; height:10px; border-radius:50%; background:#ff5c5c; }
     .dot.on { background:#25ff9b; }
-    .card { position:relative; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.24); }
+    .card { position:relative; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.24); display:flex; flex-direction:column; }
     .row { display: flex; gap: 12px; }
-    .input { display:flex; gap:10px; align-items:center; padding:10px; border-radius: 10px; border:1px solid var(--line); background:#0f1218; }
-    input[type=text] { flex: 1; padding: 12px; border-radius: 8px; border: none; outline: none; background: transparent; color: var(--text); font-size: 15px; }
+    .input { display:flex; gap:10px; align-items:center; padding:10px 12px; border-radius: 999px; border:1px solid var(--line); background:#0f1218; }
+    input[type=text] { flex: 1; padding: 10px 4px; border-radius: 999px; border: none; outline: none; background: transparent; color: var(--text); font-size: 15px; }
     /* Ensure file input stays within sidebar width */
     input[type=file].input { display:block; width:100%; padding:10px; background:#151236; border:1px solid var(--line); border-radius:10px; color:var(--text); }
     input[type=file].input::file-selector-button { background: var(--accent); color:#fff; border:none; padding:8px 10px; border-radius:8px; margin-right:10px; cursor:pointer; }
@@ -42,13 +46,22 @@
     .chipbar { display:flex; flex-wrap: wrap; gap:10px; margin-top:10px; }
     .chip { padding:8px 12px; border-radius: 999px; border:1px solid var(--line); color:#c8d0df; background: #0f1218; cursor:pointer; }
     .chip:hover { background:#121623; }
-    .log { margin-top: 16px; max-height: 520px; overflow: auto; padding-right: 4px; }
-    .item { background:#0f1218; border:1px solid var(--line); border-radius: 12px; padding:12px; margin:12px 0; }
+    .log { margin-top: 8px; padding-right: 4px; padding-bottom: 8px; display:flex; flex-direction:column; gap:8px; }
+    .item { border-radius: 16px; padding:10px 14px; margin:0; max-width: 72%; line-height:1.5; display:inline-block; font-size:0.95rem; }
     /* Bot replies: darker than user for contrast */
-    body.light-mode .item.bot-item { background: linear-gradient(180deg, #e75a00, #c73d00); border-color: rgba(200,90,30,.7); }
+    body.light-mode .item.bot-item {
+      align-self:flex-start;
+      background: linear-gradient(180deg, #e75a00, #c73d00);
+      border-color: rgba(200,90,30,.7);
+    }
     body.light-mode .item.bot-item .bot { color:#ffffff; }
-    /* User messages: bright orange */
-    body.light-mode .item.user-item { background: linear-gradient(180deg, #ff8a00, #ff5500); border-color: rgba(255,120,60,.6); }
+    /* User messages: bright orange, right-aligned (ChatGPT-like) */
+    body.light-mode .item.user-item {
+      align-self:flex-end;
+      background: linear-gradient(180deg, #ffd24d, #ff8a00);
+      border-color: rgba(255,180,80,.7);
+      box-shadow: 0 0 16px rgba(255,180,80,.5);
+    }
     body.light-mode .item.user-item .user { color:#ffffff; }
     /* Fallback using :has for browsers supporting it */
     @supports(selector(.item:has(.bot))) {
@@ -60,15 +73,15 @@
 
     /* Dark mode: make bot bubbles slightly darker than user */
     /* Dark mode: make bot bubbles slightly darker than user */
-    body.dark-mode .item.user-item { background: #0f1218; border-color: var(--line); }
-    body.dark-mode .item.bot-item { background: #0f1218; border-color: rgba(100,110,140,.35); }
-    body.dark-mode .item.bot-item .bot, body.dark-mode .item.user-item .user { color: var(--text); }
-    .user { color:#b7a7ff; }
-    .bot { color:#9bf0e2; }
+    body.dark-mode .item.user-item { align-self:flex-end; background: linear-gradient(135deg, #3b82f6, #22c55e); border-color: rgba(56,189,248,.4); color:#f9fafb; }
+    body.dark-mode .item.bot-item { align-self:flex-start; background: #020617; border-color: rgba(148,163,184,.5); color: var(--text); }
+    body.dark-mode .item.bot-item .bot, body.dark-mode .item.user-item .user { color: inherit; }
+    .user { font-weight:500; }
+    .bot { font-weight:500; }
     small { color:var(--muted); }
     /* layout: sidebar + main */
-    .layout { display:grid; grid-template-columns: 290px 1fr; gap:14px; }
-    .side { background: var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; overflow:auto; }
+    .layout { flex:1; display:grid; grid-template-columns: 280px minmax(0, 1fr); gap:14px; min-height:0; }
+    .side { background: var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; overflow:auto; display:flex; flex-direction:column; gap:12px; }
     .profile { display:flex; flex-direction:column; align-items:center; gap:8px; padding:14px 8px 8px; border-bottom:1px solid rgba(111,141,255,.18); }
     .avatar { width:64px; height:64px; border-radius:50%; display:grid; place-items:center; color:#fff; border:1px solid var(--line); overflow:hidden; flex-shrink:0; margin-bottom:20px; position:relative; transition: transform .3s ease-in-out; }
     body.light-mode .avatar { background:#b30000; }
@@ -85,13 +98,13 @@
     .meta small { color:var(--muted); display:block; font-style: italic; font-size: .9rem; letter-spacing: .3px; }
     #profName { font-weight: 700; font-size: 1.5rem; letter-spacing: .5px; }
     .btn { text-transform: uppercase; }
-    .history { margin-top:12px; max-height: 520px; overflow:auto; }
+    .history { margin-top:12px; max-height: 40vh; overflow:auto; }
     .hitem { padding:8px 10px; border-radius:10px; border:1px solid var(--line); margin:8px 0; color:#d9d3ff; background:#151236; cursor:pointer; }
     .hitem:hover { background:#1b1746; }
     .sideActions { display:flex; gap:8px; margin-top:10px; }
-    .toggleBar { text-align:right; margin-bottom:8px; }
-    .layout.collapsed { grid-template-columns: 0 1fr; }
-    .layout.expanded { grid-template-columns: 420px 1fr; }
+    .toggleBar { text-align:right; margin-bottom:8px; display:none; }
+    .layout.collapsed { grid-template-columns: 0 minmax(0,1fr); }
+    .layout.expanded { grid-template-columns: 360px minmax(0,1fr); }
 
     /* THEME OVERRIDES AND ENHANCEMENTS */
     :root { --transition: 0.6s ease-in-out; }
@@ -161,11 +174,18 @@
     @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
     .skeleton.text { height: 14px; margin: 6px 0; }
     .skeleton.block { height: 64px; margin: 10px 0; }
-    /* Error banner */
-    .error-banner { display:none; padding:10px; border:1px solid rgba(220,40,40,.6); background: rgba(220,40,40,.15); color:#ffb6b6; border-radius:10px; margin-bottom:10px; gap:8px; align-items:center; }
+    /* Error banner (hidden, we use chat stream for errors) */
+    .error-banner { display:none !important; padding:10px; border:1px solid rgba(220,40,40,.6); background: rgba(220,40,40,.15); color:#ffb6b6; border-radius:10px; margin-bottom:10px; gap:8px; align-items:center; }
     body.light-mode .error-banner { background:#ffecec; border-color:#ff6b6b; color:#b30000; }
     .error-actions { display:flex; gap:8px; margin-left:auto; }
     .pill { border:1px solid var(--line); padding:6px 12px; border-radius:999px; background:rgba(255,255,255,.06); }
+
+    /* Chat hero (shown when no messages yet) */
+    .chat-hero { padding:32px 8px 12px; text-align:center; color:var(--muted); }
+    .chat-hero-title { font-size:2.2rem; font-weight:700; margin-bottom:8px; }
+    body.dark-mode .chat-hero-title { color:#ffffff; }
+    body.light-mode .chat-hero-title { color:#ff0000; }
+    .chat-hero-sub { font-size:1rem; }
 
     /* Sidebar glass */
     .side { background: var(--card); backdrop-filter: blur(12px); box-shadow: 0 0 24px rgba(0,0,0,.25), inset 0 0 0 1px var(--line); }
@@ -246,9 +266,23 @@
     .themeToggle { margin-top:10px; display:flex; gap:8px; align-items:center; justify-content:space-between; }
     .toggleSwitch .btn { padding:10px 12px; }
 
+    /* Quick Actions modal */
+    #quickActionsModal { position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:50; }
+    #quickActionsModal.open { display:flex; }
+    .qa-backdrop { position:absolute; inset:0; background:rgba(0,0,0,0.45); backdrop-filter: blur(2px); }
+    .qa-panel { position:relative; width:calc(100% - 32px); max-width:720px; margin:0 16px; border-radius:18px; background:var(--card); border:1px solid var(--line); box-shadow:0 16px 40px rgba(0,0,0,0.6); padding:14px 16px 16px; max-height:75vh; overflow-y:auto; overflow-x:hidden; }
+    .qa-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+    .qa-header-title { font-weight:600; font-size:14px; }
+    .qa-close-btn { padding:6px 10px; border-radius:999px; border:1px solid var(--line); background:#0f1218; color:var(--text); cursor:pointer; font-size:12px; }
+    @media (max-width: 640px) {
+      .qa-panel { border-radius:18px; width:calc(100% - 20px); max-width:none; margin:0 10px; }
+    }
+
     @media (max-width: 860px) {
-      .wrap { margin: 18px auto; }
-      .layout { grid-template-columns: 1fr; }
+      .wrap { margin: 0; padding: 8px 10px 12px; }
+      .layout { grid-template-columns: 1fr; grid-template-rows: auto auto; }
+      .side { order:1; max-height: 40vh; }
+      .layout > .card { order:2; min-height: 50vh; }
       .floating-bar { right: 12px; bottom: 12px; }
     }
   </style>
@@ -256,8 +290,8 @@
 <body>
   <div class="flames" aria-hidden="true"></div>
   <div class="wrap">
-    <h1>Draco AI</h1>
-    <div class="status"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
+    <h1 style="display:none;">Draco AI</h1>
+    <div class="status" style="display:none;"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
     <div class="toggleBar">
       <button class="btn" id="toggleSide">Hide Sidebar</button>
       <button class="btn" id="expandSide">Expand</button>
@@ -274,34 +308,31 @@
             <small id="profEmail">Powered by Aryan and his co-workers</small>
           </div>
         </div>
-        <div class="card" style="margin-top:10px;">
-          <div style="font-weight:600; margin-bottom:10px; text-align:center;">Quick Actions</div>
-          <div class="row" style="flex-direction:column; gap:12px;">
-            <input id="genTopicSide" type="text" class="input" placeholder="Topic (e.g., Quantum Computing)" />
-            <div class="button-container"><button class="btn" id="genPPTSide" style="width:100%;">Generate PPT</button></div>
-            <div class="button-container"><button class="btn" id="genPDFSide" style="width:100%;">Generate PDF</button></div>
-            <div class="button-container"><button class="btn" id="genDOCSide" style="width:100%;">Generate DOCX</button></div>
-            <input id="fileInput" type="file" accept=".pdf,.pptx,.docx" style="display:none;" />
-            <input id="instruction" type="text" class="input" placeholder="Instruction (optional, e.g., summarize)" style="display:none;" />
-            <div class="button-container"><button class="btn" id="chooseFileBtn" style="width:100%;">Choose File</button></div>
-            <div class="button-container"><button class="btn" id="uploadBtn" style="width:100%;">Upload File</button></div>
-            <div id="dropZone" class="dropzone">Drag & Drop file here</div>
-            <div class="progress" id="uploadProgress" style="display:none;"><span></span></div>
-            <div id="uploadStep" style="font-size:12px; color:var(--muted); margin-top:4px;"></div>
-            <div class="themeToggle" style="margin-top:4px;">
-              <div style="font-weight:600;">Theme</div>
-              <div class="toggleSwitch" style="display:flex; align-items:center; gap:8px;">
-                <input type="checkbox" id="themeCheckbox" style="position:absolute; opacity:0; width:0; height:0;" />
-                <label for="themeCheckbox" class="theme-toggle" aria-label="Toggle theme">
-                  <span class="slider"></span>
-                </label>
-              </div>
-            </div>
-            <div id="fileNameLabel" style="margin-top:2px; color:var(--muted); font-size:13px;"></div>
-            <div id="fileSizeLabel" style="color:var(--muted); font-size:12px;"></div>
-            <div id="uploadNote" style="margin-top:4px; color:var(--muted); font-size:13px;"></div>
+        <div class="card" style="margin-top:10px; padding:12px;">
+          <div style="font-weight:600; font-size:13px; margin-bottom:6px;">Account</div>
+          <div id="authStatus" style="font-size:12px; color:var(--muted); margin-bottom:6px;">Guest – chats not saved</div>
+          <div class="input" style="margin-bottom:8px; padding:8px 10px;">
+            <input id="loginEmail" type="text" placeholder="Enter email to sign in" style="font-size:13px;" />
+          </div>
+          <div class="row" style="gap:8px;">
+            <button class="btn" id="loginBtn" style="flex:1; padding:8px 10px; font-size:12px;">Login / Sign up</button>
+            <button class="btn" id="logoutBtn" style="flex:1; padding:8px 10px; font-size:12px; display:none;">Logout</button>
           </div>
         </div>
+        <div class="sideActions">
+          <button class="btn" id="newChatBtn" style="flex:1; padding:8px 10px; font-size:12px;">New Chat</button>
+          <button class="btn" id="clearChatBtn" style="flex:1; padding:8px 10px; font-size:12px;">Clear</button>
+        </div>
+        <div class="themeToggle" style="margin-top:4px;">
+          <div style="font-weight:600;">Theme</div>
+          <div class="toggleSwitch" style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="themeCheckbox" style="position:absolute; opacity:0; width:0; height:0;" />
+            <label for="themeCheckbox" class="theme-toggle" aria-label="Toggle theme">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+        <!-- Quick Actions moved to bottom sheet -->
         <div class="history" id="history"></div>
         <div class="card" id="memoryCard" style="margin-top:10px;">
           <div style="font-weight:600; margin-bottom:10px; text-align:center;">Your Profile</div>
@@ -320,11 +351,17 @@
             <button class="btn" id="retryBtn">Retry</button>
           </div>
         </div>
-        <div class="input" style="margin-bottom:10px;">
+        <div id="chatHero" class="chat-hero">
+          <div id="heroGreeting" class="chat-hero-title">Good to see you.</div>
+          <div class="chat-hero-sub">Ask anything to get started.</div>
+        </div>
+        <div class="log" id="log"></div>
+        <div class="input" style="margin-top:12px;">
           <input id="input" type="text" placeholder="Type a command (e.g., open youtube, play music, take note ...)" />
+          <button class="btn" id="quickActionsBtn" style="white-space:nowrap;" title="Quick Actions">+</button>
           <button class="btn" id="sendBtn">Send</button>
         </div>
-        <div class="row" style="margin-bottom:10px;">
+        <div class="row" style="margin-top:10px; margin-bottom:10px;">
           <button class="btn" id="micBtn">🎤 Speak</button>
           <button class="btn" id="stopSpeakBtn">🛑 Stop Voice</button>
         </div>
@@ -336,8 +373,6 @@
           <div class="chip" data-cmd="system status">System Status</div>
           <div class="chip" data-cmd="search for render deployment guide">Search Web</div>
         </div>
-        <div class="log" id="log"></div>
-        <small>Tip: Try "open youtube", "play music", "list notes", "remind me to drink water at 19:30"</small>
         <div class="chipbar" id="summaryChips" style="margin-top:10px;">
           <div class="chip pill" data-summary="short">Summary: Short</div>
           <div class="chip pill" data-summary="medium">Summary: Medium</div>
@@ -353,10 +388,39 @@
           <div class="chip pill" data-action="compare">Compare Files</div>
           <div class="chip pill" data-action="merge">Merge Files</div>
         </div>
+        <small>Tip: Try "open youtube", "play music", "list notes", "remind me to drink water at 19:30"</small>
         <div class="card" style="margin-top:12px;">
           <div style="font-weight:600; margin-bottom:8px;">Generated Downloads</div>
           <div id="downloadsPanel" style="font-size:14px; display:flex; flex-direction:column; gap:6px;"></div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick Actions bottom sheet modal -->
+  <div id="quickActionsModal">
+    <div class="qa-backdrop"></div>
+    <div class="qa-panel">
+      <div class="qa-header">
+        <div class="qa-header-title">Quick Actions</div>
+        <button id="qaCloseBtn" class="qa-close-btn">X</button>
+      </div>
+      <div class="row" style="flex-direction:column; gap:12px;">
+        <input id="genTopicSide" type="text" class="input" placeholder="Topic (e.g., Quantum Computing)" />
+        <div class="button-container"><button class="btn" id="genPPTSide" style="width:100%;">Generate PPT</button></div>
+        <div class="button-container"><button class="btn" id="genPDFSide" style="width:100%;">Generate PDF</button></div>
+        <div class="button-container"><button class="btn" id="genDOCSide" style="width:100%;">Generate DOCX</button></div>
+        <input id="fileInput" type="file" accept=".pdf,.pptx,.docx" style="display:none;" />
+        <input id="instruction" type="text" class="input" placeholder="Instruction (optional, e.g., summarize)" style="display:none;" />
+        <div class="button-container"><button class="btn" id="chooseFileBtn" style="width:100%;">Choose File</button></div>
+        <div class="button-container"><button class="btn" id="uploadBtn" style="width:100%;">Upload File</button></div>
+        <div id="dropZone" class="dropzone">Drag & Drop file here</div>
+        <div class="progress" id="uploadProgress" style="display:none;"><span></span></div>
+        <div id="uploadStep" style="font-size:12px; color:var(--muted); margin-top:4px;"></div>
+        <!-- Theme toggle moved to sidebar -->
+        <div id="fileNameLabel" style="margin-top:2px; color:var(--muted); font-size:13px;"></div>
+        <div id="fileSizeLabel" style="color:var(--muted); font-size:12px;"></div>
+        <div id="uploadNote" style="margin-top:4px; color:var(--muted); font-size:13px;"></div>
       </div>
     </div>
   </div>
@@ -370,6 +434,12 @@
     const stopSpeakBtn = document.getElementById('stopSpeakBtn');
     const dot = document.getElementById('dot');
     const statusText = document.getElementById('statusText');
+    const chatHero = document.getElementById('chatHero');
+    const heroGreeting = document.getElementById('heroGreeting');
+    const loginEmail = document.getElementById('loginEmail');
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const authStatus = document.getElementById('authStatus');
     // Error banner helpers (moved from top)
     const errorBanner = document.getElementById('errorBanner');
     const errorText = document.getElementById('errorText');
@@ -377,10 +447,8 @@
     const retryBtn = document.getElementById('retryBtn');
     let lastAction = null; // function to retry
     function showError(msg, retryFn){
-      if (!errorBanner) return;
-      errorText.textContent = msg || 'Something went wrong.';
-      errorBanner.style.display = 'flex';
-      errorBanner.classList.add('slide-up');
+      const text = msg || 'Something went wrong.';
+      appendItem(text, 'bot');
       lastAction = typeof retryFn === 'function' ? retryFn : null;
     }
     function hideError(){ if (errorBanner) errorBanner.style.display = 'none'; }
@@ -401,13 +469,20 @@
       socket = null;
     }
 
+    function hideHero(){ if (chatHero) chatHero.style.display = 'none'; }
+
     function appendItem(text, who='bot') {
       const el = document.createElement('div');
       el.className = 'item ' + (who === 'bot' ? 'bot-item' : 'user-item');
       el.innerHTML = `<div class="${who}">${text}</div>`;
       el.classList.add('fade-in');
       log.appendChild(el);
-      log.scrollTop = log.scrollHeight;
+      hideHero();
+      try {
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+      } catch (e) {
+        window.scrollTo(0, document.body.scrollHeight);
+      }
     }
 
     function initials(name) {
@@ -436,6 +511,21 @@
         <div><strong>Hobbies:</strong> ${hobbies}</div>
         <div><strong>Favorite Subject:</strong> ${fav}</div>
       `;
+    }
+
+    function refreshAuthUI() {
+      if (!authStatus || !loginEmail || !loginBtn || !logoutBtn) return;
+      if (user && user.logged_in) {
+        authStatus.textContent = 'Signed in as ' + (user.email || '');
+        loginEmail.value = user.email || '';
+        loginBtn.style.display = 'none';
+        logoutBtn.style.display = 'inline-block';
+      } else {
+        authStatus.textContent = 'Guest – chats not saved';
+        loginEmail.value = '';
+        loginBtn.style.display = 'inline-block';
+        logoutBtn.style.display = 'none';
+      }
     }
 
     function renderHistory() {
@@ -517,7 +607,6 @@
       } catch (e) {
         setBusy(false);
         showError('Request failed. Please retry.', ()=> sendCommand(text));
-        appendItem('Request failed. Please retry.', 'bot');
       }
     }
 
@@ -534,12 +623,18 @@
             const gd = await gp.json();
             if (gd && gd.ok) { user.profile = gd.profile || {}; renderProfile(); }
           } catch (e) {}
+          refreshAuthUI();
           return;
+        }
+        if (heroGreeting) {
+          const name = (user.profile && user.profile.name) || user.email || 'friend';
+          heroGreeting.textContent = 'Good to see you, ' + name + '.';
         }
         appendItem('Signed in as ' + user.email, 'bot');
         renderProfile();
         await loadHistory();
         await maybeRunOnboarding();
+        refreshAuthUI();
       } catch (e) { /* ignore */ }
     }
 
@@ -557,9 +652,15 @@
           const dl = await l.json();
           chatsList = (dl && dl.ok) ? dl.chats || [] : [];
         }
-        historyItems.slice(-20).forEach(it => {
-          appendItem(it.text, it.who === 'user' ? 'user' : 'bot');
-        });
+        log.innerHTML = '';
+        if (historyItems.length) {
+          if (chatHero) chatHero.style.display = 'none';
+          historyItems.slice(-20).forEach(it => {
+            appendItem(it.text, it.who === 'user' ? 'user' : 'bot');
+          });
+        } else {
+          if (chatHero) chatHero.style.display = '';
+        }
         renderHistory();
       } catch (e) {}
     }
@@ -708,6 +809,124 @@
     // Removed New Chat / Clear buttons per request
     // Update sidebar in guest mode too
     renderProfile();
+
+    const quickActionsBtn = document.getElementById('quickActionsBtn');
+    const qaModal = document.getElementById('quickActionsModal');
+    const qaBackdrop = document.querySelector('#quickActionsModal .qa-backdrop');
+    const qaCloseBtn = document.getElementById('qaCloseBtn');
+    function openQAModal(){
+      if (!qaModal) return;
+      qaModal.classList.add('open');
+      const topic = document.getElementById('genTopicSide');
+      if (topic) {
+        setTimeout(()=> topic.focus(), 50);
+      }
+    }
+    function closeQAModal(){
+      if (!qaModal) return;
+      qaModal.classList.remove('open');
+    }
+    if (quickActionsBtn) {
+      quickActionsBtn.onclick = () => {
+        try { openQAModal(); } catch (e) {}
+      };
+    }
+    if (qaBackdrop) {
+      qaBackdrop.onclick = () => { closeQAModal(); };
+    }
+    if (qaCloseBtn) {
+      qaCloseBtn.onclick = () => { closeQAModal(); };
+    }
+
+    if (loginBtn) {
+      loginBtn.onclick = async () => {
+        const email = (loginEmail && loginEmail.value || '').trim();
+        if (!email) return;
+        try {
+          const r = await fetch('/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+          });
+          const d = await r.json();
+          if (!r.ok || !d.ok) {
+            appendItem('Login failed: ' + (d.error || 'error'), 'bot');
+            return;
+          }
+          user = { logged_in: true, email: d.email || email, profile: {} };
+          appendItem('Signed in as ' + user.email, 'bot');
+          await loadHistory();
+          refreshAuthUI();
+        } catch (e) {
+          appendItem('Login error. Please try again.', 'bot');
+        }
+      };
+    }
+
+    if (logoutBtn) {
+      logoutBtn.onclick = async () => {
+        try {
+          await fetch('/logout', { method: 'POST' });
+        } catch (e) {}
+        user = { logged_in: false, email: null, profile: {} };
+        historyItems = [];
+        chatsList = [];
+        log.innerHTML = '';
+        renderHistory();
+        refreshAuthUI();
+        appendItem('Switched to guest mode. Chats will not be saved.', 'bot');
+      };
+    }
+
+    const newChatBtn = document.getElementById('newChatBtn');
+    const clearChatBtn = document.getElementById('clearChatBtn');
+
+    if (newChatBtn) {
+      newChatBtn.onclick = async () => {
+        if (!user || !user.logged_in) {
+          appendItem('Sign in with an email to create saved chats.', 'bot');
+          return;
+        }
+        try {
+          const r = await fetch('/api/chats/new', { method: 'POST' });
+          const d = await r.json();
+          if (!r.ok || !d.ok) {
+            appendItem('Could not start new chat.', 'bot');
+            return;
+          }
+          log.innerHTML = '';
+          historyItems = [];
+          await loadHistory();
+        } catch (e) {
+          appendItem('Error creating new chat.', 'bot');
+        }
+      };
+    }
+
+    if (clearChatBtn) {
+      clearChatBtn.onclick = async () => {
+        if (!user || !user.logged_in) {
+          log.innerHTML = '';
+          historyItems = [];
+          renderHistory();
+          appendItem('Cleared current guest view.', 'bot');
+          return;
+        }
+        try {
+          const r = await fetch('/api/chats/clear', { method: 'POST' });
+          const d = await r.json();
+          if (!r.ok || !d.ok) {
+            appendItem('Could not clear chat.', 'bot');
+            return;
+          }
+          log.innerHTML = '';
+          historyItems = [];
+          await loadHistory();
+        } catch (e) {
+          appendItem('Error clearing chat.', 'bot');
+        }
+      };
+    }
 
     // Theme checkbox toggle wiring with persistence
     const THEME_KEY = 'draco-theme';
