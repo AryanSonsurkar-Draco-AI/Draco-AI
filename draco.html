@@ -18,6 +18,7 @@
       --muted: #a7a2c7;
       --line: #2b2753;
     }
+
     * { box-sizing: border-box; }
     html, body { overflow-x: hidden; }
     body { font-family: 'Poppins', 'Inter', system-ui, Arial, sans-serif; margin: 0; color: var(--text);
@@ -80,7 +81,7 @@
     .bot { font-weight:500; }
     small { color:var(--muted); }
     /* layout: sidebar + main */
-    .layout { flex:1; display:grid; grid-template-columns: 280px minmax(0, 1fr); gap:14px; min-height:0; }
+    .layout { display:grid; grid-template-columns: 280px minmax(0,1fr); gap:20px; align-items:stretch; }
     .side { background: var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; overflow:auto; display:flex; flex-direction:column; gap:12px; }
     .profile { display:flex; flex-direction:column; align-items:center; gap:8px; padding:14px 8px 8px; border-bottom:1px solid rgba(111,141,255,.18); }
     .avatar { width:64px; height:64px; border-radius:50%; display:grid; place-items:center; color:#fff; border:1px solid var(--line); overflow:hidden; flex-shrink:0; margin-bottom:20px; position:relative; transition: transform .3s ease-in-out; }
@@ -189,6 +190,7 @@
 
     /* Sidebar glass */
     .side { background: var(--card); backdrop-filter: blur(12px); box-shadow: 0 0 24px rgba(0,0,0,.25), inset 0 0 0 1px var(--line); }
+    .side-close-btn { display:none; }
 
     /* Chat panel glow */
     .card { box-shadow: 0 0 0 1px var(--line), 0 0 28px rgba(0,0,0,.25); }
@@ -197,6 +199,59 @@
     .btn { position: relative; border-radius: 15px; padding: 12px 20px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; border: 1px solid transparent; transition: background var(--transition), box-shadow var(--transition), transform .2s ease; }
     body.light-mode .btn { background: #b30000; border-color: rgba(255,120,60,.35); box-shadow: 0 0 12px rgba(255, 120, 60, .25); }
     body.dark-mode .btn { background: #2200aa; border-color: rgba(120,100,255,.35); box-shadow: 0 0 12px rgba(120, 100, 255, .25); }
+
+    /* Mobile: chat full width, sidebar as slide-in overlay */
+    .mobile-menu-btn { display:none; }
+
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: minmax(0,1fr); }
+      .side {
+        position:fixed;
+        top:0;
+        bottom:0;
+        left:0;
+        width:78%;
+        max-width:320px;
+        z-index:80;
+        transform: translateX(-100%);
+        transition: transform .25s ease;
+      }
+      body.mobile-side-open .side { transform: translateX(0); }
+
+      .side-overlay {
+        display:none;
+        position:fixed;
+        inset:0;
+        background:rgba(0,0,0,.45);
+        backdrop-filter: blur(2px);
+        z-index:75;
+      }
+      body.mobile-side-open .side-overlay { display:block; }
+
+      .mobile-menu-btn {
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        position:fixed;
+        top:10px;
+        left:10px;
+        z-index:90;
+        padding:8px 10px;
+        border-radius:999px;
+        font-size:18px;
+      }
+
+      .side-close-btn {
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        margin-bottom:8px;
+        align-self:flex-end;
+        padding:6px 10px;
+        font-size:14px;
+        border-radius:999px;
+      }
+    }
     .btn:hover { transform: scale(1.05); }
     body.light-mode .btn:hover { box-shadow: 0 0 22px rgba(255, 160, 60, .55); }
     body.dark-mode .btn:hover { box-shadow: 0 0 22px rgba(120, 100, 255, .55); }
@@ -289,6 +344,10 @@
 </head>
 <body>
   <div class="flames" aria-hidden="true"></div>
+  <!-- Mobile sidebar toggle button -->
+  <button class="btn mobile-menu-btn" id="mobileMenuBtn" aria-label="Open sidebar">☰</button>
+  <!-- Mobile sidebar backdrop -->
+  <div class="side-overlay" id="sideOverlay"></div>
   <div class="wrap">
     <h1 style="display:none;">Draco AI</h1>
     <div class="status" style="display:none;"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
@@ -298,6 +357,7 @@
     </div>
     <div class="layout" id="layout">
       <div class="side" id="sidebar">
+        <button class="btn side-close-btn" id="sideCloseBtn" aria-label="Close sidebar">✕</button>
         <div class="profile">
           <div class="avatar" id="avatar" style="width:72px; height:72px;">
             <img id="dracoLogo" src="/static/Draco%20AI%20logo.jpg" alt="Draco Logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';" />
@@ -311,11 +371,14 @@
         <div class="card" style="margin-top:10px; padding:12px;">
           <div style="font-weight:600; font-size:13px; margin-bottom:6px;">Account</div>
           <div id="authStatus" style="font-size:12px; color:var(--muted); margin-bottom:6px;">Guest – chats not saved</div>
-          <div class="input" style="margin-bottom:8px; padding:8px 10px;">
+          <div class="input" style="margin-bottom:6px; padding:8px 10px;">
             <input id="loginEmail" type="text" placeholder="Enter email to sign in" style="font-size:13px;" />
           </div>
+          <div class="input" style="margin-bottom:8px; padding:8px 10px;">
+            <input id="loginCode" type="text" placeholder="Verification code" style="font-size:13px;" />
+          </div>
           <div class="row" style="gap:8px;">
-            <button class="btn" id="loginBtn" style="flex:1; padding:8px 10px; font-size:12px;">Login / Sign up</button>
+            <button class="btn" id="loginBtn" style="flex:1; padding:8px 10px; font-size:12px;">Send Code</button>
             <button class="btn" id="logoutBtn" style="flex:1; padding:8px 10px; font-size:12px; display:none;">Logout</button>
           </div>
         </div>
@@ -438,8 +501,12 @@
     const heroGreeting = document.getElementById('heroGreeting');
     const loginEmail = document.getElementById('loginEmail');
     const loginBtn = document.getElementById('loginBtn');
+    const loginCode = document.getElementById('loginCode');
     const logoutBtn = document.getElementById('logoutBtn');
     const authStatus = document.getElementById('authStatus');
+    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+    const sideOverlay = document.getElementById('sideOverlay');
+    const sideCloseBtn = document.getElementById('sideCloseBtn');
     // Error banner helpers (moved from top)
     const errorBanner = document.getElementById('errorBanner');
     const errorText = document.getElementById('errorText');
@@ -516,13 +583,15 @@
     function refreshAuthUI() {
       if (!authStatus || !loginEmail || !loginBtn || !logoutBtn) return;
       if (user && user.logged_in) {
-        authStatus.textContent = 'Signed in as ' + (user.email || '');
+        const verified = user.profile && user.profile.verified;
+        authStatus.textContent = (verified ? 'Verified: ' : 'Signed in: ') + (user.email || '');
         loginEmail.value = user.email || '';
         loginBtn.style.display = 'none';
         logoutBtn.style.display = 'inline-block';
       } else {
         authStatus.textContent = 'Guest – chats not saved';
         loginEmail.value = '';
+        if (loginCode) loginCode.value = '';
         loginBtn.style.display = 'inline-block';
         logoutBtn.style.display = 'none';
       }
@@ -644,13 +713,36 @@
           fetch('/api/chat_history'),
           fetch('/api/chats')
         ]);
-        if (!h.ok) return;
+
+        // Handle not_verified / auth errors gracefully
+        if (!h.ok) {
+          try {
+            const err = await h.json();
+            if (err && err.error === 'not_verified') {
+              appendItem('Verify your email to use saved chats. Your current session is guest-only.', 'bot');
+              return;
+            }
+          } catch (e) {}
+          return;
+        }
+
         const d = await h.json();
-        if (!d.ok) return;
+        if (!d.ok) {
+          if (d.error === 'not_verified') {
+            appendItem('Verify your email to use saved chats.', 'bot');
+          }
+          return;
+        }
         historyItems = d.items || [];
         if (l.ok) {
-          const dl = await l.json();
-          chatsList = (dl && dl.ok) ? dl.chats || [] : [];
+          try {
+            const dl = await l.json();
+            if (dl && dl.ok) {
+              chatsList = dl.chats || [];
+            } else if (dl && dl.error === 'not_verified') {
+              appendItem('Verify your email to see your saved chat list.', 'bot');
+            }
+          } catch (e) {}
         }
         log.innerHTML = '';
         if (historyItems.length) {
@@ -839,26 +931,70 @@
     }
 
     if (loginBtn) {
+      let codeSentFor = null;
       loginBtn.onclick = async () => {
-        const email = (loginEmail && loginEmail.value || '').trim();
-        if (!email) return;
+        const email = (loginEmail && loginEmail.value || '').trim().toLowerCase();
+        if (!email || email.indexOf('@') === -1) {
+          appendItem('Enter a valid email to continue.', 'bot');
+          return;
+        }
+        // Step 1: send code
+        if (!codeSentFor || codeSentFor !== email) {
+          try {
+            const r = await fetch('/login/start', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email })
+            });
+            const d = await r.json();
+            if (!r.ok || !d.ok) {
+              appendItem('Could not send code: ' + (d.error || 'error'), 'bot');
+              return;
+            }
+            codeSentFor = email;
+            loginBtn.textContent = 'Verify Code';
+            appendItem('I have generated a verification code for ' + email + '. Enter it and press Verify.', 'bot');
+          } catch (e) {
+            appendItem('Error sending verification code. Please try again.', 'bot');
+          }
+          return;
+        }
+
+        // Step 2: verify code
+        const code = (loginCode && loginCode.value || '').trim();
+        if (!code) {
+          appendItem('Enter the verification code you received.', 'bot');
+          return;
+        }
         try {
-          const r = await fetch('/login', {
+          const r = await fetch('/login/verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
+            body: JSON.stringify({ email, code })
           });
           const d = await r.json();
           if (!r.ok || !d.ok) {
-            appendItem('Login failed: ' + (d.error || 'error'), 'bot');
+            const err = d.error || 'verification_failed';
+            if (err === 'code_expired') {
+              appendItem('Code expired. Press Send Code again for a new one.', 'bot');
+              codeSentFor = null;
+              loginBtn.textContent = 'Send Code';
+            } else if (err === 'invalid_code') {
+              appendItem('That code did not match. Check it and try again.', 'bot');
+            } else {
+              appendItem('Verification failed: ' + err, 'bot');
+            }
             return;
           }
-          user = { logged_in: true, email: d.email || email, profile: {} };
-          appendItem('Signed in as ' + user.email, 'bot');
+          user = { logged_in: true, email: d.email || email, profile: d.profile || {} };
+          appendItem('Verified and signed in as ' + user.email + '. Your chats will be saved.', 'bot');
+          codeSentFor = null;
+          loginBtn.textContent = 'Send Code';
+          if (loginCode) loginCode.value = '';
           await loadHistory();
           refreshAuthUI();
         } catch (e) {
-          appendItem('Login error. Please try again.', 'bot');
+          appendItem('Verification error. Please try again.', 'bot');
         }
       };
     }

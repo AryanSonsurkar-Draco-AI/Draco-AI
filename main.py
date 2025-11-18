@@ -94,6 +94,12 @@ try:
     import draco_chat
 except Exception:
     draco_chat = None
+try:
+    import smtplib
+    from email.message import EmailMessage
+except Exception:
+    smtplib = None
+    EmailMessage = None
 
 ON_RENDER = os.environ.get("RENDER") is not None
 ON_SERVER = ON_RENDER or (os.environ.get("PORT") is not None) or (os.environ.get("RENDER_EXTERNAL_URL") is not None)
@@ -114,6 +120,13 @@ REMINDERS_FILE = "reminders.json"
 WEATHER_API_KEY = ""   # add your OpenWeatherMap key if desired
 NEWSAPI_KEY = ""       # add your News API key if desired
 USERS_DIR = os.path.join(os.getcwd(), "users")
+EMAIL_CODES = {}  # simple in-memory store: email -> {code, expires_at}
+
+SMTP_HOST = os.environ.get("DRACO_SMTP_HOST", "")
+SMTP_PORT = int(os.environ.get("DRACO_SMTP_PORT", "587") or "587")
+SMTP_USER = os.environ.get("DRACO_SMTP_USER", "")
+SMTP_PASS = os.environ.get("DRACO_SMTP_PASS", "")
+SMTP_FROM = os.environ.get("DRACO_SMTP_FROM", SMTP_USER or "")
 
 
 def safe_write_json(path, data):
@@ -148,6 +161,31 @@ def user_paths(email: str):
         "chat": os.path.join(root, "chat.json"),  # legacy single-thread file
         "chats": os.path.join(root, "chats.json"), # new: multi-chat storage
     }
+
+
+def send_verification_email(email: str, code: str) -> bool:
+    """Best-effort SMTP sender for verification codes. Returns True if sent."""
+    if not smtplib or not EmailMessage:
+        return False
+    if not (SMTP_HOST and SMTP_USER and SMTP_PASS and SMTP_FROM):
+        return False
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = "Your Draco verification code"
+        msg["From"] = SMTP_FROM
+        msg["To"] = email
+        msg.set_content(f"Your Draco verification code is: {code}\n\nIt will expire in 10 minutes.")
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as s:
+            s.starttls()
+            s.login(SMTP_USER, SMTP_PASS)
+            s.send_message(msg)
+        return True
+    except Exception as e:
+        try:
+            print(f"[email] failed to send code to {email}: {e}")
+        except Exception:
+            pass
+        return False
 
 def get_logged_in_email() -> Optional[str]:
     e = session.get("user_email")
@@ -790,10 +828,279 @@ def web_search_duckduckgo(query: str, limit: int = 3):
                 if body:
                     results.append(body)
         if not results:
-            return "No results found."
-        return " | ".join(results)[:1000]
+            return "I couldn't find anything useful for that query."
+        return "\n\n".join(results[:limit])
     except Exception as e:
         return f"Search error: {e}"
+
+
+# ------------- Small-talk & friendly replies -------------
+def handle_small_talk(cmd: str) -> Optional[str]:
+    """Return a friendly canned reply for small-talk type inputs, or None if not handled."""
+    cmd_lower = cmd.lower()
+
+    # Exact greetings with your custom lines
+    if cmd_lower == "hi":
+        reply = "Hey! Ready to tackle today?"
+        speak(reply)
+        return reply
+    if cmd_lower == "hello":
+        reply = "Hello! What's our first mission today?"
+        speak(reply)
+        return reply
+
+    # Generic greeting fallback
+    if any(x in cmd_lower for x in ["hello", "hi", "hey"]):
+        reply = personality.respond(f"Hello {memory.get_pref('name', 'friend')}! How can I help?")
+        speak(reply)
+        user_email = get_logged_in_email()
+        if user_email:
+            prof = get_user_profile(user_email)
+            name = prof.get("name") or memory.get_pref('name', 'friend')
+            reply = reply.replace("friend", name)
+        return reply
+
+    # Map of many friendly small-talk / motivation phrases
+    responses = {
+        "how are you": "I'm good, pumped to help you out!",
+        "i am tired": "Rest a bit, then we'll crush the next task.",
+        "i need motivation": "Even one small action today adds XP for tomorrow.",
+        "am i improving": "Absolutely. Every effort counts, keep stacking wins.",
+        "i am sad": "It's okay to feel down. You're stronger than you think.",
+        "cheer me up": "You’ve survived every tough day so far. Today is no different.",
+        "give me study tips": "Short focused sessions beat long distracted hours. Test yourself often.",
+        "i failed": "Failure is feedback. Adjust and come back smarter.",
+        "good morning": "Good morning! What's the first XP you want to collect today?",
+        "good night": "Good night. Rest well, tomorrow we grind smarter.",
+        "tell me a joke": "Why did the programmer quit his job? He didn't get arrays.",
+        "funny": "Error 404: Boredom not found. Let's laugh at life a bit!",
+        "i am nervous": "Take a deep breath. You've trained for this. Step forward confidently.",
+        "i am stressed": "Focus on one thing at a time. Small XP wins reduce stress.",
+        "i am bored": "Let's turn this boredom into something epic. Want a challenge?",
+        "i feel weak": "Even heroes start weak. Strength grows one step at a time.",
+        "give me a quote": "Discipline beats motivation. Show up even when you don't feel like it.",
+        "coding help": "Break the problem into pieces, test each, debug efficiently.",
+        "anime mode": "Rasengan charging, Mangekyo Sharingan scanning, Ultra Instinct ready.",
+        "fight mode": "Battle mode activated. Flame Breathing ignited, Domain Expansion active.",
+        "study mode": "Focus engaged, distractions off. Every chapter completed is XP gained.",
+        "morning motivation": "Rise, shine, and collect today's XP!",
+        "evening motivation": "Reflect on wins, rest, and prepare for tomorrow's challenges.",
+        "i am hungry": "Fuel up! Strong body, strong mind. What are you having?",
+        "i am sleepy": "Sleep is XP for your brain. Rest now, tomorrow we grind smarter.",
+        "i am frustrated": "Frustration is XP before mastery. Keep going, you'll get there.",
+        "i am worried": "Worry is wasted energy. Focus on what you can control.",
+        "project advice": "Break it into milestones, complete each, and celebrate progress.",
+        "quick tip": "Focus on one task at a time. Multitasking is an XP trap.",
+        "i need focus": "Clear your space, silence distractions, and attack your top priority.",
+        "challenge me": "I dare you to finish the next task without checking your phone. Level up!",
+        "i want to improve": "Consistency is key. Small daily improvements stack into mastery.",
+        "funny anime": "Why did Goku go to school? To get a little 'super' education.",
+        "meme": "Life is like a debug log—messy but fixable.",
+        "help me sleep": "Close your eyes, breathe, imagine leveling up while you rest.",
+        "focus mode": "Head down, XP up. Nothing breaks your focus today.",
+        "life hack": "Batch small tasks together, and you'll finish more with less energy.",
+        "success mindset": "Think like a winner: plan, execute, review, repeat.",
+        "daily motivation": "Every day is a new XP grind. Fight, learn, grow stronger.",
+        "i am lost": "Take one step. Then another. Small moves create a path forward.",
+        "anime advice": "Train like Naruto, plan like Shikamaru, never quit like Luffy.",
+        "coding motivation": "Every bug is XP. Every fix is mastery. Keep coding.",
+        "study motivation": "Each page completed is XP earned. Keep stacking progress.",
+        "morning hype": "Rise and shine! Time to collect XP and defeat today's bosses.",
+        "evening reflection": "Review your XP gained today. Plan tomorrow's grind.",
+        "i am lazy": "Small effort beats zero effort. Just start, momentum follows.",
+        "next goal": "Focus on what moves the needle most. Complete it, then move on.",
+        "energy low": "Fuel up and hydrate. Even heroes need stamina to win battles.",
+        "what can i do": "Pick one task and finish it. Momentum builds from small wins.",
+        "how to stay fit": "Move daily, hydrate, and push just a little past comfort.",
+        "coding problem": "Break it into smaller functions. Test each part like a mini-boss.",
+        "i am nervous for exams": "Revise smartly. Short, repeated sessions beat last-minute cramming.",
+        "motivate me to study": "Every chapter completed is XP gained. You're leveling up!",
+        "give me a quick joke": "Why don't programmers like nature? Too many bugs.",
+        "tell me a funny anime joke": "Why did Luffy bring a ladder? He wanted to reach new heights!",
+        "morning energy": "Coffee, water, and a plan. Time to collect XP!",
+        "how to focus": "Silence distractions, set a timer, and start small.",
+        "coding motivation quote": "Debug like a hero, test like a king, code like a legend.",
+        "i feel tired": "Take a 15-minute break. Recharge, then come back stronger.",
+        "anime advice for life": "Face challenges like Naruto, never give up, and trust your team.",
+        "funny quote": "I would exercise, but my Wi-Fi told me not to.",
+        "i am worried about tomorrow": "Focus on what you can do today. Tomorrow takes care of itself.",
+        "how to stay motivated": "Small wins daily, review progress, reward yourself a little.",
+        "i need energy": "Hydrate, move a bit, and plan one exciting task to boost XP.",
+        "give me life advice": "Focus on what you can control, improve daily, and keep leveling up.",
+        "how to improve coding": "Solve problems daily, read code, debug like a champion.",
+        "anime recommendation": "Watch a shonen series to feel unstoppable and motivated.",
+        "what should i do today": "Pick one high-value task and complete it first. XP unlocked.",
+        "i am frustrated with coding": "Every bug fixed is a level gained. Keep at it!",
+        "i need a break": "Take a short break, recharge, then get back to XP farming.",
+        "what's your name": "I am Draco AI, created to help you level up in life.",
+        "who created you": "My sensai Aryan Sonsurkar, along with Kaustubh and Ritesh, built me.",
+        "why should i use you": "Because I back you up like a reliable anime partner.",
+        "tell me a story": "Once, a young coder faced endless bugs, but persistence leveled them to master status.",
+        "i need guidance": "Start with one clear goal, then tackle small steps consistently.",
+        "how to be productive": "Block distractions, prioritize tasks, and reward yourself after each win.",
+        "i am bored at home": "Let's turn downtime into XP: learn something small, draw, or code.",
+        "morning motivation quote": "Rise, grind, repeat. XP waits for no one!",
+        "evening motivation quote": "Reflect, rest, and plan your next epic session tomorrow.",
+        "coding help for beginners": "Start with small programs, debug carefully, and learn by doing.",
+        "study help": "Break chapters into blocks, test yourself, and track progress.",
+        "how to stay calm": "Breathe, focus on what you can control, and take one step at a time.",
+        "funny anime moment": "Why did Goku refuse to take a nap? He didn't want to lose XP!",
+        "give me a joke to tell friends": "Why did the computer go to therapy? Too many bytes of stress.",
+        "how to beat procrastination": "Start with the smallest task. Momentum grows from action.",
+        "study plan": "Divide tasks into daily XP blocks and track completion.",
+        "i am nervous about interview": "Prepare key points, breathe, and imagine nailing it like a hero.",
+        "how to learn fast": "Focus, repeat, test yourself, and review mistakes for XP gain.",
+        "coding motivation for today": "Even small code today adds XP for your future mastery.",
+        "anime motivation": "Fight like Naruto, plan like Shikamaru, never give up.",
+        "how to feel confident": "Preparation builds confidence. Show up knowing you've practiced.",
+        "i am stressed about exams": "Focus on one topic at a time. Stepwise XP wins work best.",
+        "daily encouragement": "Keep moving forward. Small progress today is big tomorrow.",
+        "how to remember things": "Use repetition, test yourself, and relate new info to what you know.",
+        "funny programming joke": "Why do programmers prefer dark mode? Light attracts bugs.",
+        "anime joke for friends": "Why did Luffy refuse to fight? He was busy eating meat!",
+        "what can i learn today": "Pick a topic you've been avoiding and conquer one small piece.",
+        "how to stay motivated during exams": "Short sprints, mini rewards, and tracking XP progress helps a lot.",
+        "morning hype up": "Good morning! XP and new opportunities await today.",
+        "evening reflection advice": "Review your XP gained, plan tomorrow, rest, and recharge.",
+        "how to stay disciplined": "Consistency over intensity. Show up every day, even small steps.",
+        "funny tts joke": "Why did the AI refuse to sleep? It had too many processes running.",
+        "study motivation quote": "Discipline beats motivation. Show up every day to collect XP.",
+        "coding quote": "Every error is a checkpoint, every fix is XP gained.",
+        "anime quote motivation": "Believe in your strength, train hard, and never give up.",
+        "morning energy boost": "Water, stretch, and tackle one XP task first thing.",
+        "evening energy boost": "Reflect, rest, plan your XP goals for tomorrow.",
+        "i feel lazy": "Start with just one small action. Momentum builds quickly.",
+        "i need help coding": "Break your problem into functions and tackle them one by one.",
+        "funny shonen moment": "Why did Naruto bring a ladder? To reach his next level!",
+        "give me life tip": "Focus on what you can control, improve daily, and trust your process.",
+        "i am stuck": "Take a deep breath, try a different angle, small steps lead forward.",
+        "how to keep focus": "Silence distractions, set short timers, and track progress.",
+        "funny daily quote": "I would exercise, but my coffee is watching me.",
+        "study encouragement": "Every page you finish is XP earned. Keep stacking!",
+        "anime humor": "Why did Goku carry a notebook? To keep track of his power levels!",
+        "coding encouragement": "Every bug solved is XP gained. You're leveling fast.",
+        "daily xp tip": "One focused task completed > five half-done tasks.",
+        "i feel anxious": "Focus on one small step, then the next. You're capable.",
+        "help me relax": "Breathe, stretch, visualize success. XP restored.",
+        "funny life moment": "Why did the gamer cross the road? To reach level 2.",
+        "coding humor": "Why did the function break up with the variable? Too many arguments.",
+        "anime help me": "Believe like Luffy, plan like Shikamaru, fight like Naruto.",
+        "study hack": "Pomodoro technique: 25 minutes focus, 5 minutes rest, repeat.",
+        "morning productivity tip": "Do your hardest XP task first, energy is highest now.",
+        "evening productivity tip": "Review today's XP gains, set small wins for tomorrow.",
+        "funny support": "Even heroes need laughs. Why did the AI cross the server? To reach the cloud!",
+        "coding motivation morning": "Debug, compile, conquer. Your code is leveling today.",
+        "anime motivation morning": "Rise like a shonen hero, today's XP is waiting!",
+        "evening anime motivation": "Rest, reflect, then prepare to conquer tomorrow like a hero.",
+        "how to deal with failure": "Failure is feedback. Learn, adjust, and XP up next time.",
+        "funny quote for friends": "I would clean my room, but my Wi-Fi told me to wait.",
+        "study tip for exams": "Short focused blocks, repeated testing, review mistakes, XP gained.",
+        "coding advice": "Start small, test often, debug like a hero.",
+        "anime advice quote": "Never give up, even if the odds are against you.",
+        "i feel lazy today": "One small action beats none. Let's take that first step.",
+        "morning cheer up": "Good morning! XP and new opportunities await today.",
+        "evening cheer up": "Reflect on your wins today. XP collected, rest now.",
+        "i am feeling sleepy": "Rest up, XP regenerates when you recharge.",
+        "give me quick tip": "Focus on one thing at a time and finish it fully.",
+        "how to stay positive": "Count wins, learn from losses, and keep moving forward.",
+        "i am bored with life": "Try a new XP challenge: learn, draw, or code something small.",
+        "help me with coding problem": "Break it into small steps and tackle one function at a time.",
+        "funny story": "Once, a gamer slept through XP farming… and woke up a hero!",
+        "daily inspiration": "Small wins every day lead to epic levels in life.",
+        "how to beat laziness": "Start with one small task. Momentum builds quickly.",
+        "i need encouragement": "You've got this. Even small progress counts as XP.",
+        "funny anime quote": "Why did Goku take a nap? He needed to level up!",
+        "how to stay focused": "Short sprints, no distractions, track your XP.",
+        "funny tech joke": "Why did the programmer quit? Too many exceptions in life.",
+        "give me inspiration": "Discipline beats motivation. Show up and XP will follow.",
+        "morning cheer": "New day, new XP, new chance to level up.",
+        "evening cheer": "Reflect on XP earned, rest, then grind tomorrow.",
+        "how to learn coding fast": "Start small, debug often, and learn by doing.",
+        "how to memorize better": "Repeat, test yourself, and link new info to what you know.",
+        "funny quote for today": "I would exercise, but my coffee told me to wait.",
+        "study encouragement morning": "Focus on one chapter first. XP will stack quickly.",
+        "study encouragement evening": "Review what you learned, XP collected, and plan next steps.",
+        "daily coding tip": "Write clean functions, test often, debug like a pro.",
+        "anime motivation quote": "Believe in your strength, train hard, and never give up.",
+        "daily xp hack": "Focus on one task fully instead of many half-done ones.",
+        "i feel anxious today": "One small step at a time. You've got the skills to XP up.",
+        "help me relax": "Breathe deeply, visualize success, and XP will restore.",
+        "funny programming moment": "Why did the function break up with the variable? Too many arguments.",
+        "morning coding motivation": "Debug, compile, conquer. Today's code is XP gained.",
+        "evening coding motivation": "Reflect on fixes, plan tomorrow's XP, rest well.",
+        "funny shonen anime joke": "Why did Naruto bring a ladder? To reach his next level!",
+        "give me life lesson": "Learn from failures, XP grows from experience.",
+        "i am stuck on a problem": "Take a step back, think differently, and try small moves.",
+        "how to stay disciplined at coding": "Show up daily, even for 15 minutes, XP stacks fast.",
+        "funny anime tts joke": "Why did Goku carry a notebook? To track his power levels!",
+        "study motivation afternoon": "Short sprints now will save hours later.",
+        "coding motivation afternoon": "Even small code adds XP. Keep leveling up!",
+        "morning life motivation": "Rise like a hero, today is full of XP to earn!",
+        "evening life motivation": "Reflect, recharge, prepare to conquer tomorrow.",
+        "funny coding tts line": "Why do programmers prefer dark mode? Light attracts bugs.",
+        "funny anime for friends": "Why did Luffy refuse to fight? He was busy eating meat!",
+        "quick study tip": "Active recall + Pomodoro blocks = maximum XP gain.",
+        "quick coding tip": "Test small pieces often, fix bugs immediately.",
+        "daily motivation morning": "Collect XP, level up, and start strong!",
+        "daily motivation evening": "Rest, reflect on XP earned, then plan tomorrow.",
+        "how to stay positive while stressed": "Focus on what you can control, take one XP step at a time.",
+        "funny quote for students": "I would study, but my coffee said wait!",
+        "coding humor for friends": "Why did the loop break up with the variable? Too clingy!",
+        "anime humor tts": "Why did Goku refuse to sleep? Too many levels to grind!",
+        "morning energy tip": "Water, stretch, tackle one key XP task first.",
+        "evening energy tip": "Reflect, rest, plan tomorrow's XP.",
+        "i feel lazy today": "Just one small action beats none. Start now!",
+        "coding support": "Break problems into small steps and conquer one by one.",
+        "anime encouragement": "Fight like a shonen hero, XP grows with persistence.",
+        "study encouragement": "Every page you complete is XP earned. Keep stacking!",
+        "funny coding quote": "Why did the computer go to therapy? Too many bytes of stress.",
+        "funny anime joke for tts": "Why did Naruto bring a map? To find his XP path!",
+        "i feel sad": "It's okay, even heroes have off days. One small step helps.",
+        "study help now": "Focus on one chapter, test yourself, XP gained.",
+        "coding help now": "Debug small parts first, then integrate slowly.",
+        "anime advice now": "Believe in your strength and never give up.",
+        "daily life tip": "Small consistent actions stack into epic wins.",
+        "funny life joke": "Why did the gamer cross the road? To reach level 2!",
+        "morning inspiration": "New XP to earn today! Rise and attack it.",
+        "evening inspiration": "Reflect, rest, and plan tomorrow's leveling.",
+        "quick encouragement": "Even one small XP step today adds up for tomorrow.",
+        "study motivation quick": "Short focus blocks + active recall = max XP.",
+        "coding motivation quick": "Every small bug fixed is XP gained. Keep going.",
+        "anime motivational line": "Train like Naruto, plan like Shikamaru, never quit.",
+        "morning xp tip": "Do hardest task first, energy is highest now.",
+        "evening xp tip": "Review XP collected, plan small wins for tomorrow.",
+        "funny anime morning joke": "Why did Luffy bring a ladder? To reach his XP level!",
+        "funny anime evening joke": "Why did Naruto take a nap? To level up overnight!",
+        "daily encouragement morning": "Rise, grind, and collect XP today!",
+        "daily encouragement evening": "Reflect on wins, rest, and prepare tomorrow.",
+        "coding advice quick": "Test often, debug fast, write small functions.",
+        "study advice quick": "Pomodoro, active recall, review mistakes for XP.",
+        "funny life moment quick": "I would clean my room, but my Wi-Fi told me to wait.",
+        "funny coding moment quick": "Why do programmers hate nature? Too many bugs.",
+        "anime encouragement quick": "XP grows with persistence. Train like a hero.",
+        "daily motivation short": "Stack XP with small wins every day.",
+        "morning energy short": "Hydrate, stretch, tackle one key XP task.",
+        "evening energy short": "Reflect, rest, and plan tomorrow's XP.",
+        "i feel lazy quick": "One small step is better than none.",
+        "study help quick": "Focus on one chapter, test yourself, gain XP.",
+        "coding help quick": "Debug one piece at a time, then integrate.",
+        "anime advice quick": "Believe in your strength, never quit, XP grows.",
+    }
+
+    # direct substring match over the mapping keys
+    for key, reply in responses.items():
+        if key in cmd_lower:
+            speak(reply)
+            return reply
+
+    # identity fallback
+    if "who are you" in cmd_lower or "what's your name" in cmd_lower:
+        reply = "I am Draco AI made by Aryan and his co-workers which are kaustubh and ritesh."
+        speak(reply)
+        return reply
+
+    return None
+
 
 # ------------- Command processing (centralised) -------------
 def process_command(raw_cmd: str) -> str:
@@ -817,26 +1124,11 @@ def process_command(raw_cmd: str) -> str:
     personality.update(cmd)
 
     # greetings / small talk
-    if any(x in cmd for x in ["hello", "hi", "hey"]):
-        reply = personality.respond(f"Hello {memory.get_pref('name', 'friend')}! How can I help?")
-        speak(reply)
-        # personalize greeting if user profile has name
-        user_email = get_logged_in_email()
-        if user_email:
-            prof = get_user_profile(user_email)
-            name = prof.get("name") or memory.get_pref('name', 'friend')
-            reply = reply.replace("friend", name)
-        return reply
+    # Friendly small-talk / motivational replies
+    small = handle_small_talk(cmd)
+    if small is not None:
+        return small
 
-    if "how are you" in cmd:
-        reply = personality.respond("I'm good — ready to help you.")
-        speak(reply)
-        return reply
-
-    if "who are you" in cmd:
-        reply = "I am Draco AI made by Aryan and his co-workers which are kaustubh and ritesh."
-        speak(reply)
-        return reply
     if "calculate" in cmd.lower() or "solve" in cmd.lower():
         speak("I solved it.")
         return solve_math(cmd)
@@ -1226,6 +1518,17 @@ def process_command(raw_cmd: str) -> str:
             "Kaun bhauk raha hai , ye bata-meez.",
             "What if a girl propose you? In your dreams. ha ha ha ha ha ha.",
             "Pahili furr, sat se nikal . Joke sunna hai tuze? Mai aajaau kya udhar."
+            "My code works… and I have no idea why."
+            "Why did the coder quit his job? Because he didn’t get arrays."
+            'What’s a programmer’s favourite hangout spot? The Foo Bar.'
+            "Ek ladka bola, “Mere paas dimaag hai.” Dimaag bola, “Main toh yahan tourist hoon.”"
+            "Ek aadmi bola, “Main gym jaa raha hoon.” Gym bola, “Jhooth bolta hai.”"
+            "Internet slow ho gaya… mera patience bhi slow ho gaya."
+            "Iron Man: “I am Iron Man.”Me: “I am tired man.”"
+            "Naruto says “Rasengan,” Itachi says “Mangekyo Sharingan,” and Sasuke says “Can we talk normally for one minute?”"
+            "Goku says “Kamehameha,” Vegeta says “Final Flash,” and Bulma says “Calm down both of you.”"
+            "Gojo says “Purple Attack,” and Geto says “You use that when you don’t want to talk.”"
+            "Rengoku says “Flame Breathing,” Inosuke says “Beast Breathing,” Tengen says “Sound Breathing,” and Tanjiro says “Guys relax.”"
         ]
         reply = random.choice(jokes)
         speak(reply)
@@ -1311,8 +1614,73 @@ def guest_mode():
     # Guest mode (login removed) – just serve app
     return send_from_directory(".", "draco.html")
 
+@app.route("/login/start", methods=["POST"])
+def login_start():
+    """Start email verification by generating a one-time code.
+
+    For now this stores the code in-memory and returns it in the response
+    (suitable for development). In production you would email the code
+    instead of returning it.
+    """
+    data = request.json or {}
+    email = (data.get("email") or "").strip().lower()
+    if not email or "@" not in email:
+        return {"ok": False, "error": "invalid_email"}, 400
+
+    code = f"{random.randint(100000, 999999)}"
+    EMAIL_CODES[email] = {"code": code, "expires_at": time.time() + 600}  # 10 minutes
+
+    # In production, do not expose the code in the response.
+    # Try sending via SMTP if configured, otherwise log it server-side.
+    if ON_SERVER:
+        sent = send_verification_email(email, code)
+        if not sent:
+            try:
+                print(f"[login_start] verification code for {email}: {code}")
+            except Exception:
+                pass
+        return {"ok": True, "email": email}
+
+    # In local/dev, return the code so it is easy to test.
+    return {"ok": True, "email": email, "code": code}
+
+
+@app.route("/login/verify", methods=["POST"])
+def login_verify():
+    """Verify a code and establish a logged-in, verified session."""
+    data = request.json or {}
+    email = (data.get("email") or "").strip().lower()
+    code = (data.get("code") or "").strip()
+    if not email or "@" not in email:
+        return {"ok": False, "error": "invalid_email"}, 400
+    rec = EMAIL_CODES.get(email)
+    now = time.time()
+    if not rec or now > rec.get("expires_at", 0):
+        return {"ok": False, "error": "code_expired"}, 400
+    if code != str(rec.get("code")):
+        return {"ok": False, "error": "invalid_code"}, 400
+
+    # Code is valid; clear it and mark session + profile as verified
+    EMAIL_CODES.pop(email, None)
+    session["user_email"] = email
+    session.pop("chat_id", None)
+
+    prof = get_user_profile(email)
+    if not isinstance(prof, dict):
+        prof = {}
+    prof["verified"] = True
+    set_user_profile(email, prof)
+    return {"ok": True, "email": email, "profile": prof}
+
+
 @app.route("/login", methods=["POST"])
 def login():
+    """Legacy direct-login endpoint (kept for compatibility).
+
+    Frontend should prefer /login/start + /login/verify so that only
+    verified users get a session. This path simply logs in without
+    verification and should be used for testing only.
+    """
     data = request.json or {}
     email = (data.get("email") or "").strip().lower()
     if not email or "@" not in email:
@@ -1394,6 +1762,9 @@ def api_chat_history():
     email = get_logged_in_email()
     if not email:
         return {"ok": False, "error": "not_authenticated"}, 401
+    prof = get_user_profile(email)
+    if not isinstance(prof, dict) or not prof.get("verified"):
+        return {"ok": False, "error": "not_verified"}, 403
     chat_id = request.args.get("chat_id")
     return {"ok": True, "items": get_chat_history(email, chat_id)}
 
@@ -1402,6 +1773,9 @@ def api_chats_list():
     email = get_logged_in_email()
     if not email:
         return {"ok": False, "error": "not_authenticated"}, 401
+    prof = get_user_profile(email)
+    if not isinstance(prof, dict) or not prof.get("verified"):
+        return {"ok": False, "error": "not_verified"}, 403
     chats = _load_chats(email)
     # minimal list
     out = [
@@ -1416,6 +1790,9 @@ def api_chats_new():
     email = get_logged_in_email()
     if not email:
         return {"ok": False, "error": "not_authenticated"}, 401
+    prof = get_user_profile(email)
+    if not isinstance(prof, dict) or not prof.get("verified"):
+        return {"ok": False, "error": "not_verified"}, 403
     c = _create_new_chat(email)
     return {"ok": True, "chat": {"id": c.get("id"), "name": c.get("name")}}
 
@@ -1424,6 +1801,9 @@ def api_chats_select():
     email = get_logged_in_email()
     if not email:
         return {"ok": False, "error": "not_authenticated"}, 401
+    prof = get_user_profile(email)
+    if not isinstance(prof, dict) or not prof.get("verified"):
+        return {"ok": False, "error": "not_verified"}, 403
     data = request.json or {}
     cid = str(data.get("chat_id", ""))
     if not cid:
@@ -1439,6 +1819,9 @@ def api_chats_clear():
     email = get_logged_in_email()
     if not email:
         return {"ok": False, "error": "not_authenticated"}, 401
+    prof = get_user_profile(email)
+    if not isinstance(prof, dict) or not prof.get("verified"):
+        return {"ok": False, "error": "not_verified"}, 403
     ok = _clear_current_chat(email)
     return {"ok": ok}
 
