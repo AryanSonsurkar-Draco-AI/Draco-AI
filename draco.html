@@ -494,6 +494,17 @@
           <div class="chip pill" data-action="merge">Merge Files</div>
         </div>
         <small>Tip: Try "open youtube", "play music", "list notes", "remind me to drink water at 19:30"</small>
+        <!-- Pomodoro coffee-cup widget -->
+        <div id="pomodoroWidget" style="margin-top:10px; display:none; align-items:center; gap:10px; font-size:13px;">
+          <div style="width:40px; height:60px; border-radius:8px 8px 4px 4px; border:2px solid rgba(255,255,255,0.4); position:relative; overflow:hidden; background:rgba(15,12,32,0.8);">
+            <div id="coffeeFill" style="position:absolute; left:0; right:0; bottom:0; height:100%; background:linear-gradient(180deg,#c67c4f,#5a331b);"></div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <div style="font-weight:600;">Coffee Pomodoro</div>
+            <div id="pomodoroClock" style="font-family:monospace; letter-spacing:1px;">00:00</div>
+            <div id="pomodoroLabel" style="color:var(--muted);">Idle</div>
+          </div>
+        </div>
         <div class="card" style="margin-top:12px;">
           <div style="font-weight:600; margin-bottom:8px;">Generated Downloads</div>
           <div id="downloadsPanel" style="font-size:14px; display:flex; flex-direction:column; gap:6px;"></div>
@@ -570,6 +581,39 @@
     // Busy state helpers
     const allButtons = ()=> Array.from(document.querySelectorAll('button.btn'));
     function setBusy(on){ allButtons().forEach(b=> b.disabled = !!on); }
+
+    // Pomodoro widget elements
+    const pomodoroWidget = document.getElementById('pomodoroWidget');
+    const coffeeFill = document.getElementById('coffeeFill');
+    const pomodoroClock = document.getElementById('pomodoroClock');
+    const pomodoroLabel = document.getElementById('pomodoroLabel');
+
+    function formatSeconds(sec){
+      const s = Math.max(0, Math.floor(sec||0));
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return String(m).padStart(2,'0') + ':' + String(r).padStart(2,'0');
+    }
+
+    function updatePomodoroUI(payload){
+      if (!pomodoroWidget || !coffeeFill || !pomodoroClock || !pomodoroLabel) return;
+      const total = payload && typeof payload.total_seconds === 'number' ? payload.total_seconds : 0;
+      const remaining = payload && typeof payload.remaining_seconds === 'number' ? payload.remaining_seconds : 0;
+      const mode = (payload && payload.mode) || 'pomodoro';
+      const progress = payload && typeof payload.progress === 'number' ? payload.progress : (total>0 ? 1 - (remaining/total) : 0);
+      pomodoroWidget.style.display = total > 0 ? 'flex' : 'none';
+      pomodoroClock.textContent = formatSeconds(remaining || total);
+      const percent = Math.max(0, Math.min(100, (1 - progress) * 100));
+      coffeeFill.style.height = percent + '%';
+      if (mode === 'break') pomodoroLabel.textContent = 'Break time';
+      else if (mode === 'mini') pomodoroLabel.textContent = 'Mini Pomodoro';
+      else if (mode === 'focus') pomodoroLabel.textContent = 'Focus sprint';
+      else pomodoroLabel.textContent = 'Pomodoro';
+    }
+
+    function hidePomodoroUI(){
+      if (pomodoroWidget) pomodoroWidget.style.display = 'none';
+    }
 
     let socket = null;
     let user = { logged_in: false, email: null, profile: {} };
@@ -831,6 +875,38 @@
       } catch (e) {}
     }
 
+    // Web Audio beeps for timers / reminders
+    let audioCtx = null;
+    function ensureAudioCtx(){
+      if (audioCtx) return audioCtx;
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        audioCtx = new AC();
+      } catch (e) { audioCtx = null; }
+      return audioCtx;
+    }
+
+    function playBeep(kind){
+      const ctx = ensureAudioCtx();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      let freq = 880, duration = 0.08, vol = 0.08;
+      if (kind === 'reminder') { freq = 1200; duration = 0.5; vol = 0.18; }
+      else if (kind === 'pomodoro_start') { freq = 660; duration = 0.2; vol = 0.12; }
+      else if (kind === 'pomodoro_end') { freq = 520; duration = 0.9; vol = 0.2; }
+      else if (kind === 'tick') { freq = 1000; duration = 0.03; vol = 0.04; }
+      osc.frequency.value = freq;
+      gain.gain.value = vol;
+      const now = ctx.currentTime;
+      gain.gain.setValueAtTime(vol, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      osc.start(now);
+      osc.stop(now + duration + 0.02);
+    }
+
     async function sendCommand(text) {
       if (!text) return;
       appendItem(text, 'user');
@@ -1016,6 +1092,54 @@
         }
         refreshGamestate();
         showTyping(false);
+      });
+
+      socket.on('pomodoro_started', (data) => {
+        updatePomodoroUI({
+          mode: data && data.mode,
+          total_seconds: data && data.total_seconds,
+          remaining_seconds: data && data.total_seconds,
+          progress: 0,
+        });
+      });
+
+      socket.on('pomodoro_tick', (data) => {
+        updatePomodoroUI(data || {});
+      });
+
+      socket.on('pomodoro_done', () => {
+        hidePomodoroUI();
+      });
+
+      socket.on('pomodoro_paused', () => {
+        if (pomodoroLabel) pomodoroLabel.textContent = 'Paused';
+      });
+
+      socket.on('pomodoro_resumed', () => {
+        if (pomodoroLabel) pomodoroLabel.textContent = 'Running';
+      });
+
+      socket.on('pomodoro_reset', (data) => {
+        updatePomodoroUI({
+          mode: data && data.mode,
+          total_seconds: data && data.total_seconds,
+          remaining_seconds: data && data.total_seconds,
+          progress: 0,
+        });
+      });
+
+      socket.on('pomodoro_stopped', () => {
+        hidePomodoroUI();
+      });
+
+      socket.on('play_beep', (payload) => {
+        const kind = payload && payload.kind || 'tick';
+        playBeep(kind);
+      });
+
+      socket.on('reminder_fired', (payload) => {
+        const t = payload && payload.text ? String(payload.text) : '';
+        if (t) appendItem('⏰ ' + t, 'bot');
       });
     } else {
       statusText.textContent = 'HTTP mode';

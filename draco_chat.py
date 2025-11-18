@@ -187,6 +187,29 @@ def lookup_knowledge(keys: List[str]) -> str:
     return "\n\n".join(out)
 
 
+def _detect_coding_language(text: str) -> Optional[str]:
+    """Simple detector for common coding language names in free text."""
+    t = text.lower()
+    if "python" in t:
+        return "Python"
+    # detect plain C before C++/CPP
+    if " c " in (" " + t + " ") and "c++" not in t and "cpp" not in t:
+        return "C"
+    if "c++" in t or "cpp" in t:
+        return "C++"
+    if "java" in t and "javascript" not in t:
+        return "Java"
+    if "javascript" in t or " js " in (" " + t + " "):
+        return "JavaScript"
+    if "html" in t and "css" not in t:
+        return "HTML"
+    if "css" in t and "html" not in t:
+        return "CSS"
+    if "html" in t and "css" in t:
+        return "HTML/CSS"
+    return None
+
+
 def chat_reply(text: str, profile: Dict[str, Any], ctx: ChatContext) -> Dict[str, Any]:
     """Main entry. Returns a structured dict: {text, updated_profile?, title?, bullets?}.
     No external calls, purely rule-based.
@@ -205,6 +228,89 @@ def chat_reply(text: str, profile: Dict[str, Any], ctx: ChatContext) -> Dict[str
     pf = personalize_followups(text, profile)
     if pf:
         return {"text": pf}
+
+    # Coding follow-up: favorite subject is coding and user answered our prompt
+    fav = (profile.get("favorite_subject") or "").lower()
+    lower = text.lower()
+    if fav == "coding":
+        pending = profile.get("coding_followup")
+        # First step: user replies "practice question" or "quick tip"
+        if not pending and ("practice question" in lower or "practice questions" in lower or "quick tip" in lower):
+            if "practice" in lower:
+                profile["coding_followup"] = "questions"
+                return {
+                    "text": "Nice, let's practice coding! Which language? Python, C++, Java, JavaScript, or HTML/CSS?",
+                    "updated_profile": profile,
+                }
+            else:
+                profile["coding_followup"] = "quick_tip"
+                return {
+                    "text": "Sure! For which language do you want a quick coding tip? Python, C++, Java, JavaScript, or HTML/CSS?",
+                    "updated_profile": profile,
+                }
+
+        # Second step: user answers with a language name
+        if pending in ("questions", "quick_tip"):
+            lang = _detect_coding_language(lower)
+            if lang:
+                # clear state
+                profile["coding_followup"] = ""
+                if pending == "questions":
+                    if lang == "Python":
+                        qs = [
+                            "Write a Python function that returns True if a string is a palindrome.",
+                            "Given a list of numbers, return the second largest element.",
+                            "Explain the difference between a list, tuple, and set in Python.",
+                        ]
+                    elif lang == "C":
+                        qs = [
+                            "Write a C program to find the largest element in an array.",
+                            "Explain the difference between a pointer and an array in C.",
+                            "Implement a function in C that counts the vowels in a string.",
+                        ]
+                    elif lang == "C++":
+                        qs = [
+                            "Write a C++ program to reverse an array in-place.",
+                            "What is a reference and how is it different from a pointer in C++?",
+                            "Implement a simple class for a BankAccount with deposit and withdraw methods.",
+                        ]
+                    elif lang == "Java":
+                        qs = [
+                            "Explain the difference between an interface and an abstract class in Java.",
+                            "Write a Java method to check if a number is prime.",
+                            "What is the purpose of the 'static' keyword in Java?",
+                        ]
+                    elif lang == "JavaScript":
+                        qs = [
+                            "What is the difference between 'let', 'const', and 'var' in JavaScript?",
+                            "Write a function that debounces another function.",
+                            "Explain how promises work and what 'async/await' does.",
+                        ]
+                    elif lang in ("HTML", "CSS", "HTML/CSS"):
+                        qs = [
+                            "Create a simple HTML page with a header, footer, and a main section.",
+                            "Write CSS to center a div both vertically and horizontally.",
+                            "Explain the difference between inline, inline-block, and block elements.",
+                        ]
+                    reply_text = "Here are some {} practice questions:\n- ".format(lang) + "\n- ".join(qs)
+                    return {"text": reply_text, "updated_profile": profile}
+                else:
+                    if lang == "Python":
+                        tip = "Use list comprehensions and 'enumerate' to write clean loops, and always prefer 'with open(...)' for file handling."
+                    elif lang == "C":
+                        tip = "Practice pointer arithmetic carefully and always free dynamically allocated memory to avoid leaks."
+                    elif lang == "C++":
+                        tip = "Prefer std::vector over raw arrays, and initialize variables using brace initialization to avoid surprises."
+                    elif lang == "Java":
+                        tip = "Keep your classes small and focused, and always program to interfaces rather than concrete implementations."
+                    elif lang == "JavaScript":
+                        tip = "Avoid global variables, use 'const' and 'let', and keep async code readable with async/await."
+                    elif lang in ("HTML", "CSS", "HTML/CSS"):
+                        tip = "Use semantic HTML tags and keep your CSS modular with utility classes or BEM-style naming."
+                    else:
+                        tip = "Keep your code small, readable, and well-commented, whatever the language."
+                    reply_text = f"Quick {lang} tip: {tip}"
+                    return {"text": reply_text, "updated_profile": profile}
 
     # Homework assist
     title, bullets = homework_assist(text)
