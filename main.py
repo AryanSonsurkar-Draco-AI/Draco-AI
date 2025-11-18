@@ -94,12 +94,6 @@ try:
     import draco_chat
 except Exception:
     draco_chat = None
-try:
-    import smtplib
-    from email.message import EmailMessage
-except Exception:
-    smtplib = None
-    EmailMessage = None
 
 ON_RENDER = os.environ.get("RENDER") is not None
 ON_SERVER = ON_RENDER or (os.environ.get("PORT") is not None) or (os.environ.get("RENDER_EXTERNAL_URL") is not None)
@@ -120,14 +114,6 @@ REMINDERS_FILE = "reminders.json"
 WEATHER_API_KEY = ""   # add your OpenWeatherMap key if desired
 NEWSAPI_KEY = ""       # add your News API key if desired
 USERS_DIR = os.path.join(os.getcwd(), "users")
-EMAIL_CODES = {}  # simple in-memory store: email -> {code, expires_at}
-
-SMTP_HOST = os.environ.get("DRACO_SMTP_HOST", "")
-SMTP_PORT = int(os.environ.get("DRACO_SMTP_PORT", "587") or "587")
-SMTP_USER = os.environ.get("DRACO_SMTP_USER", "")
-SMTP_PASS = os.environ.get("DRACO_SMTP_PASS", "")
-SMTP_FROM = os.environ.get("DRACO_SMTP_FROM", SMTP_USER or "")
-
 
 def safe_write_json(path, data):
     with open(path, "w", encoding="utf-8") as f:
@@ -161,31 +147,6 @@ def user_paths(email: str):
         "chat": os.path.join(root, "chat.json"),  # legacy single-thread file
         "chats": os.path.join(root, "chats.json"), # new: multi-chat storage
     }
-
-
-def send_verification_email(email: str, code: str) -> bool:
-    """Best-effort SMTP sender for verification codes. Returns True if sent."""
-    if not smtplib or not EmailMessage:
-        return False
-    if not (SMTP_HOST and SMTP_USER and SMTP_PASS and SMTP_FROM):
-        return False
-    try:
-        msg = EmailMessage()
-        msg["Subject"] = "Your Draco verification code"
-        msg["From"] = SMTP_FROM
-        msg["To"] = email
-        msg.set_content(f"Your Draco verification code is: {code}\n\nIt will expire in 10 minutes.")
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as s:
-            s.starttls()
-            s.login(SMTP_USER, SMTP_PASS)
-            s.send_message(msg)
-        return True
-    except Exception as e:
-        try:
-            print(f"[email] failed to send code to {email}: {e}")
-        except Exception:
-            pass
-        return False
 
 def get_logged_in_email() -> Optional[str]:
     e = session.get("user_email")
@@ -374,6 +335,90 @@ class Personality:
 memory = MemoryManager()
 personality = Personality()
 chat_ctx = draco_chat.ChatContext() if draco_chat else None
+
+# ------------- Gamification (XP / Levels / Modes) -------------
+
+def _ensure_gamification():
+    g = memory.long.get("gamification")
+    if not isinstance(g, dict):
+        g = {}
+    if "level" not in g:
+        g["level"] = 1
+    if "xp" not in g:
+        g["xp"] = 0
+    if "mode" not in g:
+        g["mode"] = "balanced"  # study / coding / balanced
+    if "total_xp" not in g:
+        g["total_xp"] = 0
+    if "last_action" not in g:
+        g["last_action"] = None
+    if "badges" not in g or not isinstance(g["badges"], list):
+        g["badges"] = []
+    memory.long["gamification"] = g
+    memory._save()
+    return g
+
+
+def _xp_needed(level: int) -> int:
+    try:
+        lvl = max(1, int(level))
+    except Exception:
+        lvl = 1
+    return 50 + lvl * 20
+
+
+def add_xp(kind: str, amount: int):
+    """Award XP for an action kind (study/coding/general)."""
+    if amount <= 0:
+        return
+    g = _ensure_gamification()
+    # small boost based on current mode
+    mode = g.get("mode", "balanced")
+    boost = 1.0
+    if mode == "study" and kind == "study":
+        boost = 1.2
+    elif mode == "coding" and kind == "coding":
+        boost = 1.2
+    gained = int(amount * boost)
+    g["xp"] = int(g.get("xp", 0)) + gained
+    g["total_xp"] = int(g.get("total_xp", 0)) + gained
+    g["last_action"] = {"kind": kind, "amount": gained, "ts": time.time()}
+
+    # Level up loop
+    while g["xp"] >= _xp_needed(g["level"]):
+        needed = _xp_needed(g["level"])
+        g["xp"] -= needed
+        g["level"] += 1
+
+    memory.long["gamification"] = g
+    memory._save()
+
+
+def get_gamestate():
+    g = _ensure_gamification()
+    lvl = int(g.get("level", 1))
+    xp = int(g.get("xp", 0))
+    needed = _xp_needed(lvl)
+    return {
+        "level": lvl,
+        "xp": xp,
+        "xp_needed": needed,
+        "mode": g.get("mode", "balanced"),
+        "total_xp": int(g.get("total_xp", 0)),
+        "badges": g.get("badges", []),
+        "last_action": g.get("last_action"),
+    }
+
+
+def set_mode(mode: str):
+    g = _ensure_gamification()
+    m = (mode or "balanced").lower()
+    if m not in ("study", "coding", "balanced"):
+        m = "balanced"
+    g["mode"] = m
+    memory.long["gamification"] = g
+    memory._save()
+    return m
 
 # ------------- TTS (single speak implementation) -------------
 # On servers (Render/containers), avoid initializing pyttsx3 (needs eSpeak)
@@ -1102,49 +1147,52 @@ def handle_small_talk(cmd: str) -> Optional[str]:
     return None
 
 
-# ------------- Command processing (centralised) -------------
-def process_command(raw_cmd: str) -> str:
-    """
-    Central router: map raw user phrases to functions. Returns a string that will be both emitted and spoken.
-    Add your 30-40 specific commands here; this is the place to expand.
-    """
+# ------------- Command processing (central router) -------------
+def process_command(raw_cmd: str):
+    """Map raw user phrases to actions. Returns text or a small dict for web actions."""
     if not raw_cmd:
         return "Please say something."
 
     cmd = raw_cmd.strip().lower()
-    # Save to global session memory
+
+    # Save to session / history
     memory.add(f"You: {raw_cmd}")
-    # If logged in, append to per-user chat history
     user_email = get_logged_in_email()
     if user_email:
         try:
             save_chat_line(user_email, "user", raw_cmd)
         except Exception:
             pass
+
     personality.update(cmd)
 
-    # greetings / small talk
-    # Friendly small-talk / motivational replies
+    # Small-talk first
     small = handle_small_talk(cmd)
     if small is not None:
         return small
 
-    if "calculate" in cmd.lower() or "solve" in cmd.lower():
+    # Gamification XP hooks (keyword-based)
+    if any(k in cmd for k in ["notes", "note ", "summarize", "summary", "flashcard", "study", "exam", "research"]):
+        add_xp("study", 5)
+    if any(k in cmd for k in ["code", "bug", "error", "function", "class", "refactor", "debug"]):
+        add_xp("coding", 5)
+
+    # Math and time/date
+    if "calculate" in cmd or "solve" in cmd:
         speak("I solved it.")
         return solve_math(cmd)
-    if ("time" in cmd.lower() and "what" in cmd.lower()) or cmd.lower() == "time":
+    if ("time" in cmd and "what" in cmd) or cmd == "time":
         india_tz = pytz.timezone("Asia/Kolkata")
         now = datetime.datetime.now(india_tz)
-        t = now.strftime("%I:%M %p").lstrip("0")  # 12-hour format, remove leading zero
+        t = now.strftime("%I:%M %p").lstrip("0")
         speak(f"The time is {t}")
         return f"The time is {t}"
-
     if "date" in cmd:
         d = datetime.date.today().strftime("%B %d, %Y")
         speak(f"Today is {d}")
         return f"Today is {d}"
 
-    # open websites
+    # Open common websites
     if "open youtube" in cmd:
         if ON_SERVER:
             return {"text": "Opening YouTube…", "action": "open_url", "url": "https://youtube.com"}
@@ -1181,31 +1229,33 @@ def process_command(raw_cmd: str) -> str:
         r = open_whatsapp_web()
         speak(personality.respond(r))
         return r
-    if "weather" in cmd.lower():
-        city_name = cmd.lower().replace("weather in", "").strip()
+
+    # Weather / news via helpers
+    if "weather in" in cmd:
+        city_name = cmd.replace("weather in", "").strip()
         weather_info = get_weather(city_name)
         speak(weather_info)
         return weather_info
-    if "news" in cmd.lower():
-        topic_name = cmd.lower().replace("news on", "").strip()
+    if cmd.startswith("news on ") or cmd == "news":
+        topic_name = cmd.replace("news on", "", 1).strip() or "general"
         news_info = get_news(topic_name)
         speak(news_info)
         return news_info
-    if "convert" in cmd.lower() or "km to miles" in cmd.lower() or "c to f" in cmd.lower():
+
+    # Unit conversion
+    if "convert" in cmd or "km to miles" in cmd or "c to f" in cmd:
         result = convert_unit(cmd)
         speak(result)
         return result
 
-    # whatsapp send (phrase: send whatsapp to 919xxxxxxxxx message hi)
+    # WhatsApp send
     if "whatsapp" in cmd and "send" in cmd:
-        # naive parse: "send whatsapp to 919xxxxxxxxx msg hello there"
         parts = cmd.split()
         phone = None
         message = None
-        for i, p in enumerate(parts):
+        for p in parts:
             if p.isdigit() and (9 <= len(p) <= 15):
                 phone = p
-                # message is remainder after 'message' or 'msg' or 'text'
                 if "message" in parts:
                     idx = parts.index("message") + 1
                     message = " ".join(parts[idx:])
@@ -1224,38 +1274,36 @@ def process_command(raw_cmd: str) -> str:
             r = send_whatsapp_message(phone, message)
             speak(r)
             return r
-        else:
-            return "Please provide phone number and message. Example: send whatsapp to 919123456789 message Hello"
+        return "Please provide phone number and message. Example: send whatsapp to 919123456789 message Hello"
 
-    # music
+    # Music
     if cmd.startswith("play "):
-        # allow "play music <name>", "play song <name>", or just "play <name>"
-        rest = cmd[5:].strip()  # after "play "
+        rest = cmd[5:].strip()
         name = None
         if rest.startswith("music "):
-            name = rest[6:].strip()  # after "music "
+            name = rest[6:].strip()
         elif rest.startswith("song "):
-            name = rest[5:].strip()  # after "song "
+            name = rest[5:].strip()
         elif rest:
-            name = rest  # just "play faded" -> "faded"
+            name = rest
         r = play_music_from_library(name)
         if isinstance(r, dict):
             return r
         speak(str(r))
         return str(r)
-    if "pause music" in cmd or "pause" == cmd:
+    if "pause music" in cmd or cmd == "pause":
         if musicLibrary and hasattr(musicLibrary, "pause"):
             musicLibrary.pause()
             speak("Paused music.")
             return "Paused music."
         return "No music library pause function available."
 
-    # system commands
-    if "system status" in cmd or "status" in cmd:
+    # System commands
+    if "system status" in cmd or cmd == "status":
         s = system_status_summary()
         speak(s)
         return s
-    if "sleep" in cmd or "sleep pc" in cmd or "put pc in sleep" in cmd:
+    if "sleep pc" in cmd or cmd == "sleep" or "put pc in sleep" in cmd:
         ok, msg = sleep_pc()
         speak(msg)
         return msg
@@ -1266,7 +1314,6 @@ def process_command(raw_cmd: str) -> str:
             return f"Screenshot: {path}"
         except Exception as e:
             return f"Screenshot failed: {e}"
-
     if "shutdown" in cmd:
         speak("Shutting down the PC in 5 seconds. Cancel if you didn't mean this.")
         if platform.system() == "Windows":
@@ -1274,7 +1321,6 @@ def process_command(raw_cmd: str) -> str:
         else:
             subprocess.run(["shutdown", "now"])
         return "Shutdown initiated."
-
     if "restart" in cmd:
         speak("Restarting now.")
         if platform.system() == "Windows":
@@ -1282,14 +1328,13 @@ def process_command(raw_cmd: str) -> str:
         else:
             subprocess.run(["reboot"])
         return "Restart initiated."
-
-    if "lock device" in cmd or "lock" == cmd:
+    if cmd == "lock" or "lock device" in cmd:
         if platform.system() == "Windows":
             subprocess.run(["rundll32.exe", "user32.dll,LockWorkStation"])
             return "Locked PC."
         return "Lock not available on this OS."
 
-    # settings controls
+    # Settings controls
     if cmd.startswith("set brightness "):
         try:
             val = int(cmd.rsplit("set brightness ", 1)[1].strip().rstrip("%"))
@@ -1307,160 +1352,8 @@ def process_command(raw_cmd: str) -> str:
         ok, msg = toggle_wifi(False)
         speak(msg)
         return msg
-    if cmd.startswith("set volume "):
-        try:
-            val = int(cmd.rsplit("set volume ", 1)[1].strip().rstrip("%"))
-            val = max(0, min(100, val))
-            ok, msg = set_volume(val)
-            speak(msg)
-            return msg
-        except Exception:
-            return "Please specify volume as a number 0-100."
-    if "bluetooth on" in cmd or "turn bluetooth on" in cmd:
-        ok, msg = toggle_bluetooth(True)
-        speak(msg)
-        return msg
-    if "bluetooth off" in cmd or "turn bluetooth off" in cmd:
-        ok, msg = toggle_bluetooth(False)
-        speak(msg)
-        return msg
 
-    # file generation commands
-    if cmd.startswith("generate ppt on ") or cmd.startswith("create ppt on "):
-        topic = cmd.replace("generate ppt on ", "", 1).replace("create ppt on ", "", 1).strip()
-        if not topic:
-            return "Please provide a topic."
-        # optional: detect "N sentences/per slide"
-        msps = None
-        m = re.search(r"(\d{1,2})\s*(?:sentences?|per\s*slide)", cmd)
-        if m:
-            try:
-                msps = max(1, min(8, int(m.group(1))))
-            except Exception:
-                msps = None
-        points, sources = research_query_to_texts_with_sources(topic, limit=8)
-        try:
-            if msps:
-                path = _generate_pptx(f"{topic.title()} - Slides", points, max_sentences_per_slide=msps)
-            else:
-                path = _generate_pptx(f"{topic.title()} - Slides", points)
-            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
-            url = f"/download/{rel}"
-            speak("Slides ready. Opening the download link.")
-            labeled = []
-            for u in sources:
-                try:
-                    d = urlparse(u).netloc or u
-                except Exception:
-                    d = u
-                labeled.append({"label": d, "url": u})
-            return {"text": f"Generated slides for {topic}. Download: {url}", "action": "open_url", "url": url, "sources": sources, "sources_labeled": labeled}
-        except Exception as e:
-            return f"Could not generate PPTX: {e}"
-
-    if cmd.startswith("generate doc on ") or cmd.startswith("create doc on "):
-        topic = cmd.replace("generate doc on ", "", 1).replace("create doc on ", "", 1).strip()
-        if not topic:
-            return "Please provide a topic."
-        points = research_query_to_texts(topic, limit=10)
-        try:
-            path = _generate_docx(f"{topic.title()} - Notes", points)
-            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
-            url = f"/download/{rel}"
-            speak("Document ready. Opening the download link.")
-            return {"text": f"Generated DOCX for {topic}. Download: {url}", "action": "open_url", "url": url}
-        except Exception as e:
-            return f"Could not generate DOCX: {e}"
-
-    if cmd.startswith("generate pdf on ") or cmd.startswith("create pdf on "):
-        topic = cmd.replace("generate pdf on ", "", 1).replace("create pdf on ", "", 1).strip()
-        if not topic:
-            return "Please provide a topic."
-        points, sources = research_query_to_texts_with_sources(topic, limit=12)
-        try:
-            path = _generate_pdf(f"{topic.title()} - Report", points, sources=sources)
-            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
-            url = f"/download/{rel}"
-            speak("PDF ready. Opening the download link.")
-            # Label sources for UI too
-            labeled = []
-            for u in sources:
-                try:
-                    d = urlparse(u).netloc or u
-                except Exception:
-                    d = u
-                labeled.append({"label": d, "url": u})
-            return {"text": f"Generated PDF for {topic}. Download: {url}", "action": "open_url", "url": url, "sources": sources, "sources_labeled": labeled}
-        except Exception as e:
-            return f"Could not generate PDF: {e}"
-
-    if cmd.startswith("generate notes on ") or cmd.startswith("create notes on "):
-        topic = cmd.replace("generate notes on ", "", 1).replace("create notes on ", "", 1).strip()
-        if not topic:
-            return "Please provide a topic."
-        points, sources = research_query_to_texts_with_sources(topic, limit=10)
-        try:
-            # Build notes lines and append sources
-            lines = list(points)
-            if sources:
-                lines.append("")
-                lines.append("Sources:")
-                for s in sources:
-                    lines.append(s)
-            path = _generate_docx(f"{topic.title()} - Study Notes", lines)
-            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
-            url = f"/download/{rel}"
-            speak("Study notes ready. Opening the download link.")
-            labeled = []
-            for u in sources:
-                try:
-                    d = urlparse(u).netloc or u
-                except Exception:
-                    d = u
-                labeled.append({"label": d, "url": u})
-            return {"text": f"Generated notes for {topic}. Download: {url}", "action": "open_url", "url": url, "sources": sources, "sources_labeled": labeled}
-        except Exception as e:
-            return f"Could not generate Notes: {e}"
-
-    # type text into active window
-    if cmd.startswith("type "):
-        text_to_type = raw_cmd.strip()[5:]
-        ok, msg = type_text(text_to_type)
-        speak(msg)
-        return msg
-
-    # open desktop apps
-    if cmd.startswith("open app ") or cmd.startswith("open "):
-        # try to parse "open app vscode" or "open spotify"
-        name = cmd.replace("open app ", "").replace("open ", "").strip()
-        ok = open_app_windows(name)
-        if ok:
-            s = f"Opened {name}"
-            speak(s)
-            return s
-        else:
-            return f"Couldn't open {name}"
-
-    # file manager actions
-    if cmd.startswith("find file ") or cmd.startswith("search file "):
-        term = cmd.split(" ", 2)[2] if len(cmd.split(" ", 2)) > 2 else ""
-        matches = []
-        for root, _, files in os.walk(os.path.expanduser("~")):
-            for f in files:
-                if term.lower() in f.lower():
-                    matches.append(os.path.join(root, f))
-                    if len(matches) >= 6:
-                        break
-            if len(matches) >= 6:
-                break
-        if not matches:
-            reply = "No files found."
-        else:
-            reply = f"Found {len(matches)} files. First: {matches[0]}"
-        speak(reply)
-        return reply
-
-    # notes / reminders
+    # Notes / reminders / study helpers
     if cmd.startswith("take note") or cmd.startswith("note "):
         note_text = cmd.replace("take note", "").replace("note", "").strip()
         if not note_text:
@@ -1474,12 +1367,11 @@ def process_command(raw_cmd: str) -> str:
         n = notes_mgr.list()
         if not n:
             return "No notes."
-        short = "; ".join([f"{i+1}. {x['text']}" for i,x in enumerate(n[:6])])
+        short = "; ".join([f"{i+1}. {x['text']}" for i, x in enumerate(n[:6])])
         speak("Reading notes.")
         return short
 
     if "set reminder" in cmd or "remind me" in cmd:
-        # naive parse: "remind me to call mom at 19:30"
         if " at " in cmd:
             try:
                 before, atpart = cmd.rsplit(" at ", 1)
@@ -1498,218 +1390,123 @@ def process_command(raw_cmd: str) -> str:
                 return r
             except Exception as e:
                 return f"Couldn't set reminder: {e}"
-        else:
-            return "Please include time with 'at'. Example: remind me to call mom at 19:30"
+        return "Please include time with 'at'. Example: remind me to call mom at 19:30"
 
-    # web search
+    # Summarize recent chat (study helper)
+    if "summarize this chat" in cmd or "chat summary" in cmd:
+        sess = memory.get_session()[-40:]
+        if not sess:
+            return "There isn't enough recent chat to summarize yet."
+        text_blob = "\n".join(x.get("text", "") for x in sess if x.get("text"))
+        summary = _summarize_text(text_blob, max_len=800)
+        add_xp("study", 10)
+        return "Here is a short summary of our recent chat:\n" + summary
+
+    # Generate practice questions from recent context
+    if "generate questions" in cmd or "practice questions" in cmd:
+        sess = memory.get_session()[-40:]
+        if not sess:
+            return "I need some recent content or explanation to turn into questions. Try asking a concept first."
+        text_blob = "\n".join(x.get("text", "") for x in sess if x.get("text"))
+        pts = _extract_key_points(text_blob, limit=8)
+        if not pts:
+            return "I couldn't find enough material to build questions from. Try explaining the topic again."
+        lines = []
+        for i, p in enumerate(pts, 1):
+            base = p.strip().rstrip(".?!")
+            q = base
+            if not q.lower().startswith(("what", "why", "how", "when", "where", "who")):
+                q = "What about: " + q
+            lines.append(f"Q{i}. {q}?")
+        add_xp("study", 12)
+        return "Here are some practice questions based on our recent discussion:\n" + "\n".join(lines)
+
+    # Web search
     if cmd.startswith("search for ") or cmd.startswith("what is ") or cmd.startswith("who is "):
         q = cmd.replace("search for ", "").replace("what is ", "").replace("who is ", "")
         res = web_search_duckduckgo(q)
         speak("Here's what I found.")
         return res
 
-    # jokes
-    if "joke" in cmd or "tell me a joke" in cmd:
-        jokes = [
-            "Why do programmers prefer dark mode? Because light attracts bugs!",
-            "I told my computer I needed a break, and it said 'No problem — I'll go to sleep.'",
-            "There are only 10 kinds of people in the world: those who understand binary and those who don't.",
-            "Rishte mai hum tumhare baap lagte hai.",
-            "Kaun bhauk raha hai , ye bata-meez.",
-            "What if a girl propose you? In your dreams. ha ha ha ha ha ha.",
-            "Pahili furr, sat se nikal . Joke sunna hai tuze? Mai aajaau kya udhar."
-            "My code works… and I have no idea why."
-            "Why did the coder quit his job? Because he didn’t get arrays."
-            'What’s a programmer’s favourite hangout spot? The Foo Bar.'
-            "Ek ladka bola, “Mere paas dimaag hai.” Dimaag bola, “Main toh yahan tourist hoon.”"
-            "Ek aadmi bola, “Main gym jaa raha hoon.” Gym bola, “Jhooth bolta hai.”"
-            "Internet slow ho gaya… mera patience bhi slow ho gaya."
-            "Iron Man: “I am Iron Man.”Me: “I am tired man.”"
-            "Naruto says “Rasengan,” Itachi says “Mangekyo Sharingan,” and Sasuke says “Can we talk normally for one minute?”"
-            "Goku says “Kamehameha,” Vegeta says “Final Flash,” and Bulma says “Calm down both of you.”"
-            "Gojo says “Purple Attack,” and Geto says “You use that when you don’t want to talk.”"
-            "Rengoku says “Flame Breathing,” Inosuke says “Beast Breathing,” Tengen says “Sound Breathing,” and Tanjiro says “Guys relax.”"
-        ]
-        reply = random.choice(jokes)
-        speak(reply)
-        return reply
+    # Coding helpers (non-LLM heuristics)
+    if "explain this code" in cmd or cmd.startswith("explain code"):
+        add_xp("coding", 10)
+        return (
+            "Here's how I approach explaining code without running it:\n"
+            "1. Break it into functions and blocks.\n"
+            "2. Identify inputs, outputs, and side effects.\n"
+            "3. Track the main data structures through the code path.\n"
+            "Paste the code here and I will walk you through it step by step."
+        )
 
-    # weather placeholder
-    if "weather" in cmd:
-        if WEATHER_API_KEY:
-            # user can implement call to OpenWeatherMap here
-            return "Weather lookup available — add API key to WEATHER_API_KEY."
-        else:
-            return "Weather feature needs an API key. Add it to WEATHER_API_KEY."
+    if "find bug" in cmd or "debug this code" in cmd or "debug my code" in cmd:
+        add_xp("coding", 12)
+        return (
+            "To debug this code together, we'll do this:\n"
+            "- Add print/log statements around the part that fails.\n"
+            "- Check variable values against what you expect.\n"
+            "- Narrow down the smallest snippet that still shows the bug.\n"
+            "Send me the error message and the code, and I'll help you reason through it."
+        )
 
-    # news placeholder
-    if "news" in cmd or "headlines" in cmd:
-        if NEWSAPI_KEY:
-            return "News lookup available — add NEWSAPI_KEY."
-        else:
-            return "News feature needs an API key. Add it to NEWSAPI_KEY."
+    if "refactor this" in cmd or "refactor code" in cmd:
+        add_xp("coding", 10)
+        return (
+            "Refactoring plan:\n"
+            "1. Extract repeated logic into small helper functions.\n"
+            "2. Rename variables and functions to be more descriptive.\n"
+            "3. Separate input/processing/output into clear layers.\n"
+            "Paste the code and I will suggest a cleaner structure."
+        )
 
-    # research and doc generation
-    if cmd.startswith("research ") or cmd.startswith("search topic "):
-        topic = cmd.replace("research ", "", 1).replace("search topic ", "", 1).strip()
-        if not topic:
-            return "Please provide a topic. Example: research quantum computing basics"
-        items = research_query_to_texts(topic, limit=6)
-        # try to generate docx
-        path, err = save_docx_from_texts(topic, items)
-        if path:
-            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
-            url = f"/download/{rel}"
-            speak("I compiled a short brief and created a document for you.")
-            return {"text": f"Research summary ready. Download: {url}", "action": "open_url", "url": url}
-        else:
-            speak("Here is a quick summary I found.")
-            return " • " + "\n • ".join(items[:6])
-
-    # run shell command (explicit phrase: run)
+    # Run shell command
     if cmd.startswith("run "):
         to_run = cmd.replace("run ", "", 1)
         out, err = run_system_command(to_run)
         if out:
             speak("Command executed, returning output.")
             return out[:1500]
-        else:
-            return f"Command error: {err}"
+        return f"Command error: {err}"
 
-    # Rule-based chat engine (self-contained, personalized)
+    # Rule-based chat engine fallback
     if draco_chat and isinstance(cmd, str) and cmd:
         user_email = get_logged_in_email()
         profile = get_user_profile(user_email) if user_email else memory.long
         try:
             out = draco_chat.chat_reply(raw_cmd, profile, chat_ctx)
             if isinstance(out, dict):
-                # persist profile if updated
                 if out.get("updated_profile") is not None:
                     if user_email:
-                        set_user_profile(user_email, out["updated_profile"]) 
+                        set_user_profile(user_email, out["updated_profile"])
                     else:
-                        # store minimal fields in memory fallback
                         for k, v in out["updated_profile"].items():
                             memory.set_pref(k, v)
                 text = str(out.get("text", ""))
                 if text:
                     speak(text)
                     return text
-        except Exception as e:
+        except Exception:
             pass
 
-    # fallback
+    # Final fallback
     speak("I didn't get that. Try asking me to open apps, play music, take notes, set reminders or search the web.")
     return "Unknown command. Try: open youtube, play music, take note, set reminder, search for ..."
+
 
 # ------------- Flask / SocketIO endpoints -------------
 @app.route("/")
 def index():
     # Always show main app; login removed
-        return send_from_directory(".", "draco.html")
-
+    return send_from_directory(".", "draco.html")
 
 @app.route("/guest")
 def guest_mode():
     # Guest mode (login removed) – just serve app
     return send_from_directory(".", "draco.html")
 
-@app.route("/login/start", methods=["POST"])
-def login_start():
-    """Start email verification by generating a one-time code.
-
-    For now this stores the code in-memory and returns it in the response
-    (suitable for development). In production you would email the code
-    instead of returning it.
-    """
-    data = request.json or {}
-    email = (data.get("email") or "").strip().lower()
-    if not email or "@" not in email:
-        return {"ok": False, "error": "invalid_email"}, 400
-
-    code = f"{random.randint(100000, 999999)}"
-    EMAIL_CODES[email] = {"code": code, "expires_at": time.time() + 600}  # 10 minutes
-
-    # In production, do not expose the code in the response.
-    # Try sending via SMTP if configured, otherwise log it server-side.
-    if ON_SERVER:
-        sent = send_verification_email(email, code)
-        if not sent:
-            try:
-                print(f"[login_start] verification code for {email}: {code}")
-            except Exception:
-                pass
-        return {"ok": True, "email": email}
-
-    # In local/dev, return the code so it is easy to test.
-    return {"ok": True, "email": email, "code": code}
-
-
-@app.route("/login/verify", methods=["POST"])
-def login_verify():
-    """Verify a code and establish a logged-in, verified session."""
-    data = request.json or {}
-    email = (data.get("email") or "").strip().lower()
-    code = (data.get("code") or "").strip()
-    if not email or "@" not in email:
-        return {"ok": False, "error": "invalid_email"}, 400
-    rec = EMAIL_CODES.get(email)
-    now = time.time()
-    if not rec or now > rec.get("expires_at", 0):
-        return {"ok": False, "error": "code_expired"}, 400
-    if code != str(rec.get("code")):
-        return {"ok": False, "error": "invalid_code"}, 400
-
-    # Code is valid; clear it and mark session + profile as verified
-    EMAIL_CODES.pop(email, None)
-    session["user_email"] = email
-    session.pop("chat_id", None)
-
-    prof = get_user_profile(email)
-    if not isinstance(prof, dict):
-        prof = {}
-    prof["verified"] = True
-    set_user_profile(email, prof)
-    return {"ok": True, "email": email, "profile": prof}
-
-
-@app.route("/login", methods=["POST"])
-def login():
-    """Legacy direct-login endpoint (kept for compatibility).
-
-    Frontend should prefer /login/start + /login/verify so that only
-    verified users get a session. This path simply logs in without
-    verification and should be used for testing only.
-    """
-    data = request.json or {}
-    email = (data.get("email") or "").strip().lower()
-    if not email or "@" not in email:
-        return {"ok": False, "error": "invalid_email"}, 400
-    session["user_email"] = email
-    session.pop("chat_id", None)
-    return {"ok": True, "email": email}
-
-
-@app.route("/logout", methods=["POST"])
-def logout():
-    session.pop("user_email", None)
-    session.pop("chat_id", None)
-    return {"ok": True}
-
-
-@app.route("/me")
-def me():
-    email = get_logged_in_email()
-    if not email:
-        return {"logged_in": False}
-    prof = get_user_profile(email)
-    return {"logged_in": True, "email": email, "profile": prof}
-
 @app.route("/api/profile", methods=["GET", "POST"])
 def api_profile():
     email = get_logged_in_email()
-    if not email:
-        return {"ok": False, "error": "not_authenticated"}, 401
     if request.method == "GET":
         return {"ok": True, "profile": get_user_profile(email)}
     data = request.json or {}
@@ -1723,8 +1520,6 @@ def api_profile():
 @app.route("/api/profile/clear", methods=["POST"])
 def api_profile_clear():
     email = get_logged_in_email()
-    if not email:
-        return {"ok": False, "error": "not_authenticated"}, 401
     set_user_profile(email, {})
     return {"ok": True}
 
@@ -1760,22 +1555,12 @@ def api_guest_profile_clear():
 @app.route("/api/chat_history", methods=["GET"]) 
 def api_chat_history():
     email = get_logged_in_email()
-    if not email:
-        return {"ok": False, "error": "not_authenticated"}, 401
-    prof = get_user_profile(email)
-    if not isinstance(prof, dict) or not prof.get("verified"):
-        return {"ok": False, "error": "not_verified"}, 403
     chat_id = request.args.get("chat_id")
     return {"ok": True, "items": get_chat_history(email, chat_id)}
 
 @app.route("/api/chats", methods=["GET"]) 
 def api_chats_list():
     email = get_logged_in_email()
-    if not email:
-        return {"ok": False, "error": "not_authenticated"}, 401
-    prof = get_user_profile(email)
-    if not isinstance(prof, dict) or not prof.get("verified"):
-        return {"ok": False, "error": "not_verified"}, 403
     chats = _load_chats(email)
     # minimal list
     out = [
@@ -1788,22 +1573,12 @@ def api_chats_list():
 @app.route("/api/chats/new", methods=["POST"]) 
 def api_chats_new():
     email = get_logged_in_email()
-    if not email:
-        return {"ok": False, "error": "not_authenticated"}, 401
-    prof = get_user_profile(email)
-    if not isinstance(prof, dict) or not prof.get("verified"):
-        return {"ok": False, "error": "not_verified"}, 403
     c = _create_new_chat(email)
     return {"ok": True, "chat": {"id": c.get("id"), "name": c.get("name")}}
 
 @app.route("/api/chats/select", methods=["POST"]) 
 def api_chats_select():
     email = get_logged_in_email()
-    if not email:
-        return {"ok": False, "error": "not_authenticated"}, 401
-    prof = get_user_profile(email)
-    if not isinstance(prof, dict) or not prof.get("verified"):
-        return {"ok": False, "error": "not_verified"}, 403
     data = request.json or {}
     cid = str(data.get("chat_id", ""))
     if not cid:
@@ -1817,15 +1592,8 @@ def api_chats_select():
 @app.route("/api/chats/clear", methods=["POST"]) 
 def api_chats_clear():
     email = get_logged_in_email()
-    if not email:
-        return {"ok": False, "error": "not_authenticated"}, 401
-    prof = get_user_profile(email)
-    if not isinstance(prof, dict) or not prof.get("verified"):
-        return {"ok": False, "error": "not_verified"}, 403
     ok = _clear_current_chat(email)
     return {"ok": ok}
-
-
 
 # ------------- Research & DOCX export -------------
 GENERATED_DIR = os.path.join(os.getcwd(), "generated")
@@ -1881,6 +1649,16 @@ def save_docx_from_texts(title: str, bullets):
         return path, None
     except Exception as e:
         return None, str(e)
+
+def _generate_docx(title: str, bullets):
+    """Compatibility wrapper around save_docx_from_texts that returns only the path.
+
+    Many parts of the codebase call _generate_docx(title, bullets) and expect a path.
+    """
+    path, err = save_docx_from_texts(title, bullets)
+    if not path:
+        raise RuntimeError(err or "failed to write DOCX")
+    return path
 
 @app.route("/api/research", methods=["POST"])
 def api_research():
@@ -2069,51 +1847,6 @@ def _extract_glossary(text: str, limit: int = 15):
     terms.sort(key=lambda x: x.lower())
     items = [f"{t}: " for t in terms[:limit]]
     return items
-
-def _generate_docx(title: str, bullets) -> str:
-    if not Document:
-        raise RuntimeError("python-docx not installed.")
-    doc = Document()
-    doc.core_properties.title = title
-    try:
-        doc.core_properties.author = "Draco AI"
-        doc.core_properties.subject = "Generated Document"
-    except Exception:
-        pass
-    sec = doc.sections[0]
-    try:
-        sec.top_margin, sec.bottom_margin, sec.left_margin, sec.right_margin = [sp.Inches(1)] * 4  # type: ignore
-    except Exception:
-        try:
-            from docx.shared import Inches as _In
-            sec.top_margin = _In(1)
-            sec.bottom_margin = _In(1)
-            sec.left_margin = _In(1)
-            sec.right_margin = _In(1)
-        except Exception:
-            pass
-    try:
-        header = sec.header
-        hpar = header.paragraphs[0] if header.paragraphs else header.add_paragraph("")
-        hpar.text = title
-        try:
-            from docx.enum.text import WD_ALIGN_PARAGRAPH
-            hpar.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        except Exception:
-            pass
-    except Exception:
-        pass
-    doc.add_heading(title, level=1)
-    for b in bullets:
-        try:
-            p = doc.add_paragraph(str(b), style="List Bullet")
-        except Exception:
-            p = doc.add_paragraph(str(b))
-    safe = "".join(ch for ch in title if ch.isalnum() or ch in (" ","_","-")).strip() or "document"
-    name = f"{safe[:40].replace(' ','_')}_{int(time.time())}.docx"
-    path = os.path.join(GENERATED_DIR, name)
-    doc.save(path)
-    return path
 
 def _generate_pptx(title: str, bullets, max_sentences_per_slide: int = 4) -> str:
     if not Presentation:

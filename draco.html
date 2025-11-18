@@ -395,20 +395,6 @@
             <small id="profEmail">Powered by Aryan and his co-workers</small>
           </div>
         </div>
-        <div class="card" style="margin-top:10px; padding:12px;">
-          <div style="font-weight:600; font-size:13px; margin-bottom:6px;">Account</div>
-          <div id="authStatus" style="font-size:12px; color:var(--muted); margin-bottom:6px;">Guest – chats not saved</div>
-          <div class="input" style="margin-bottom:6px; padding:8px 10px;">
-            <input id="loginEmail" type="text" placeholder="Enter email to sign in" style="font-size:13px;" />
-          </div>
-          <div class="input" style="margin-bottom:8px; padding:8px 10px;">
-            <input id="loginCode" type="text" placeholder="Verification code" style="font-size:13px;" />
-          </div>
-          <div class="row" style="gap:8px;">
-            <button class="btn" id="loginBtn" style="flex:1; padding:8px 10px; font-size:12px;">Send Code</button>
-            <button class="btn" id="logoutBtn" style="flex:1; padding:8px 10px; font-size:12px; display:none;">Logout</button>
-          </div>
-        </div>
         <div class="sideActions">
           <button class="btn" id="newChatBtn" style="flex:1; padding:8px 10px; font-size:12px;">New Chat</button>
           <button class="btn" id="clearChatBtn" style="flex:1; padding:8px 10px; font-size:12px;">Clear</button>
@@ -424,6 +410,27 @@
         </div>
         <!-- Quick Actions moved to bottom sheet -->
         <div class="history" id="history"></div>
+
+        <!-- Gamification progress card -->
+        <div class="card" id="progressCard" style="margin-top:10px;">
+          <div style="font-weight:600; margin-bottom:6px; text-align:center;">Progress</div>
+          <div style="font-size:13px; display:flex; justify-content:space-between; margin-bottom:4px;">
+            <span>Level <span id="levelValue">1</span></span>
+            <span style="color:var(--muted); font-size:12px;">
+              <span id="xpValue">0</span>/<span id="xpNeeded">50</span> XP
+            </span>
+          </div>
+          <div style="width:100%; height:7px; border-radius:999px; background:rgba(255,255,255,0.12); overflow:hidden; margin-bottom:8px;">
+            <div id="xpBar" style="height:100%; width:0%; border-radius:999px; background:var(--accent-2); transition:width 0.2s ease-out;"></div>
+          </div>
+          <div style="font-size:12px; margin-bottom:4px;">Mode</div>
+          <div id="modeChips" style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button type="button" class="chip" data-mode="study">Study</button>
+            <button type="button" class="chip" data-mode="coding">Coding</button>
+            <button type="button" class="chip" data-mode="balanced">Balanced</button>
+          </div>
+        </div>
+
         <div class="card" id="memoryCard" style="margin-top:10px;">
           <div style="font-weight:600; margin-bottom:10px; text-align:center;">Your Profile</div>
           <div id="memInfo" style="font-size:14px; color:var(--text);"></div>
@@ -535,11 +542,13 @@
     const chatHero = document.getElementById('chatHero');
     const heroGreeting = document.getElementById('heroGreeting');
     const typingIndicator = document.getElementById('typingIndicator');
-    const loginEmail = document.getElementById('loginEmail');
-    const loginBtn = document.getElementById('loginBtn');
-    const loginCode = document.getElementById('loginCode');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const authStatus = document.getElementById('authStatus');
+    // Gamification UI elements
+    const levelValue = document.getElementById('levelValue');
+    const xpValue = document.getElementById('xpValue');
+    const xpNeeded = document.getElementById('xpNeeded');
+    const xpBar = document.getElementById('xpBar');
+    const modeChips = document.getElementById('modeChips');
+    let lastGamestateLevel = null;
     const mobileMenuBtn = document.getElementById('mobileMenuBtn');
     const sideOverlay = document.getElementById('sideOverlay');
     const sideCloseBtn = document.getElementById('sideCloseBtn');
@@ -695,20 +704,7 @@
     }
 
     function refreshAuthUI() {
-      if (!authStatus || !loginEmail || !loginBtn || !logoutBtn) return;
-      if (user && user.logged_in) {
-        const verified = user.profile && user.profile.verified;
-        authStatus.textContent = (verified ? 'Verified: ' : 'Signed in: ') + (user.email || '');
-        loginEmail.value = user.email || '';
-        loginBtn.style.display = 'none';
-        logoutBtn.style.display = 'inline-block';
-      } else {
-        authStatus.textContent = 'Guest – chats not saved';
-        loginEmail.value = '';
-        if (loginCode) loginCode.value = '';
-        loginBtn.style.display = 'inline-block';
-        logoutBtn.style.display = 'none';
-      }
+      // Removed email login/verification UI
     }
 
     function renderHistory() {
@@ -741,6 +737,65 @@
           appendItem(it.text, it.who === 'user' ? 'user' : 'bot');
         };
         container.appendChild(d);
+      });
+    }
+
+    async function refreshGamestate() {
+      try {
+        const r = await fetch('/api/gamestate');
+        if (!r.ok) return;
+        const data = await r.json();
+        if (!data || !data.ok || !data.gamification) return;
+        const g = data.gamification;
+
+        const lvl = Number(g.level || 1);
+        const xp = Number(g.xp || 0);
+        const need = Number(g.xp_needed || 50);
+        if (levelValue) levelValue.textContent = String(lvl);
+        if (xpValue) xpValue.textContent = String(xp);
+        if (xpNeeded) xpNeeded.textContent = String(need);
+        if (xpBar) {
+          const pct = need > 0 ? Math.max(0, Math.min(100, Math.round((xp / need) * 100))) : 0;
+          xpBar.style.width = pct + '%';
+        }
+
+        const mode = (g.mode || 'balanced').toLowerCase();
+        if (modeChips) {
+          const buttons = modeChips.querySelectorAll('[data-mode]');
+          buttons.forEach(btn => {
+            const m = (btn.getAttribute('data-mode') || '').toLowerCase();
+            if (m === mode) {
+              btn.classList.add('pill');
+            } else {
+              btn.classList.remove('pill');
+            }
+          });
+        }
+
+        if (lastGamestateLevel !== null && lvl > lastGamestateLevel) {
+          appendItem('Level up! You reached Level ' + lvl + '.', 'bot');
+        }
+        lastGamestateLevel = lvl;
+      } catch (e) {
+        // ignore errors
+      }
+    }
+
+    if (modeChips) {
+      modeChips.addEventListener('click', async (e) => {
+        const btn = e.target.closest('[data-mode]');
+        if (!btn) return;
+        const mode = btn.getAttribute('data-mode');
+        try {
+          await fetch('/api/gamestate/mode', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode })
+          });
+          refreshGamestate();
+        } catch (err) {
+          // silent
+        }
       });
     }
 
@@ -810,6 +865,7 @@
           speakText(t);
           maybeAddFollowup(t);
         }
+        refreshGamestate();
         if (data && Array.isArray(data.sources_labeled) && data.sources_labeled.length) {
           const list = data.sources_labeled.map(s => `<a href="${s.url}" target="_blank" rel="noopener noreferrer">${s.label}</a>`).join(' | ');
           appendItem('Sources: ' + list, 'bot');
@@ -822,31 +878,14 @@
     }
 
     async function loadMe() {
+      // Pure guest mode: no email login, profile stored locally
+      user = { logged_in: false, email: null, profile: {} };
+      appendItem('Guest mode: your chats won\'t be saved. Profile stored locally.', 'bot');
       try {
-        const r = await fetch('/me');
-        const d = await r.json();
-        user = d || { logged_in:false };
-        if (!user.logged_in) {
-          appendItem('Guest mode: your chats won\'t be saved. Profile stored locally.', 'bot');
-          // load guest profile into memory card
-          try {
-            const gp = await fetch('/api/guest_profile');
-            const gd = await gp.json();
-            if (gd && gd.ok) { user.profile = gd.profile || {}; renderProfile(); }
-          } catch (e) {}
-          refreshAuthUI();
-          return;
-        }
-        if (heroGreeting) {
-          const name = (user.profile && user.profile.name) || user.email || 'friend';
-          heroGreeting.textContent = 'Good to see you, ' + name + '.';
-        }
-        appendItem('Signed in as ' + user.email, 'bot');
-        renderProfile();
-        await loadHistory();
-        await maybeRunOnboarding();
-        refreshAuthUI();
-      } catch (e) { /* ignore */ }
+        const gp = await fetch('/api/guest_profile');
+        const gd = await gp.json();
+        if (gd && gd.ok) { user.profile = gd.profile || {}; renderProfile(); }
+      } catch (e) {}
     }
 
     async function loadHistory() {
@@ -975,6 +1014,7 @@
           const list = data.sources_labeled.map(s => `<a href="${s.url}" target="_blank" rel="noopener noreferrer">${s.label}</a>`).join(' | ');
           appendItem('Sources: ' + list, 'bot');
         }
+        refreshGamestate();
         showTyping(false);
       });
     } else {
@@ -1074,99 +1114,13 @@
       qaCloseBtn.onclick = () => { closeQAModal(); };
     }
 
-    if (loginBtn) {
-      let codeSentFor = null;
-      loginBtn.onclick = async () => {
-        const email = (loginEmail && loginEmail.value || '').trim().toLowerCase();
-        if (!email || email.indexOf('@') === -1) {
-          appendItem('Enter a valid email to continue.', 'bot');
-          return;
-        }
-        // Step 1: send code
-        if (!codeSentFor || codeSentFor !== email) {
-          try {
-            const r = await fetch('/login/start', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email })
-            });
-            const d = await r.json();
-            if (!r.ok || !d.ok) {
-              appendItem('Could not send code: ' + (d.error || 'error'), 'bot');
-              return;
-            }
-            codeSentFor = email;
-            loginBtn.textContent = 'Verify Code';
-            appendItem('I have generated a verification code for ' + email + '. Enter it and press Verify.', 'bot');
-          } catch (e) {
-            appendItem('Error sending verification code. Please try again.', 'bot');
-          }
-          return;
-        }
-
-        // Step 2: verify code
-        const code = (loginCode && loginCode.value || '').trim();
-        if (!code) {
-          appendItem('Enter the verification code you received.', 'bot');
-          return;
-        }
-        try {
-          const r = await fetch('/login/verify', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, code })
-          });
-          const d = await r.json();
-          if (!r.ok || !d.ok) {
-            const err = d.error || 'verification_failed';
-            if (err === 'code_expired') {
-              appendItem('Code expired. Press Send Code again for a new one.', 'bot');
-              codeSentFor = null;
-              loginBtn.textContent = 'Send Code';
-            } else if (err === 'invalid_code') {
-              appendItem('That code did not match. Check it and try again.', 'bot');
-            } else {
-              appendItem('Verification failed: ' + err, 'bot');
-            }
-            return;
-          }
-          user = { logged_in: true, email: d.email || email, profile: d.profile || {} };
-          appendItem('Verified and signed in as ' + user.email + '. Your chats will be saved.', 'bot');
-          codeSentFor = null;
-          loginBtn.textContent = 'Send Code';
-          if (loginCode) loginCode.value = '';
-          await loadHistory();
-          refreshAuthUI();
-        } catch (e) {
-          appendItem('Verification error. Please try again.', 'bot');
-        }
-      };
-    }
-
-    if (logoutBtn) {
-      logoutBtn.onclick = async () => {
-        try {
-          await fetch('/logout', { method: 'POST' });
-        } catch (e) {}
-        user = { logged_in: false, email: null, profile: {} };
-        historyItems = [];
-        chatsList = [];
-        log.innerHTML = '';
-        renderHistory();
-        refreshAuthUI();
-        appendItem('Switched to guest mode. Chats will not be saved.', 'bot');
-      };
-    }
+    // No email login in guest-only mode
 
     const newChatBtn = document.getElementById('newChatBtn');
     const clearChatBtn = document.getElementById('clearChatBtn');
 
     if (newChatBtn) {
       newChatBtn.onclick = async () => {
-        if (!user || !user.logged_in) {
-          appendItem('Sign in with an email to create saved chats.', 'bot');
-          return;
-        }
         try {
           const r = await fetch('/api/chats/new', { method: 'POST' });
           const d = await r.json();
@@ -1185,13 +1139,6 @@
 
     if (clearChatBtn) {
       clearChatBtn.onclick = async () => {
-        if (!user || !user.logged_in) {
-          log.innerHTML = '';
-          historyItems = [];
-          renderHistory();
-          appendItem('Cleared current guest view.', 'bot');
-          return;
-        }
         try {
           const r = await fetch('/api/chats/clear', { method: 'POST' });
           const d = await r.json();
@@ -1450,6 +1397,9 @@
         }
       } catch (e) {}
     })();
+
+    // Load initial gamification state on startup
+    refreshGamestate();
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
