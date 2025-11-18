@@ -878,11 +878,13 @@ def web_search_duckduckgo(query: str, limit: int = 3):
     except Exception as e:
         return f"Search error: {e}"
 
-
-# ------------- Small-talk & friendly replies -------------
 def handle_small_talk(cmd: str) -> Optional[str]:
     """Return a friendly canned reply for small-talk type inputs, or None if not handled."""
     cmd_lower = cmd.lower()
+
+    # Let the central joke handler in process_command handle all joke/funny/meme phrases
+    if "joke" in cmd_lower or "funny" in cmd_lower or "meme" in cmd_lower:
+        return None
 
     # Exact greetings with your custom lines
     if cmd_lower == "hi":
@@ -917,7 +919,6 @@ def handle_small_talk(cmd: str) -> Optional[str]:
         "i failed": "Failure is feedback. Adjust and come back smarter.",
         "good morning": "Good morning! What's the first XP you want to collect today?",
         "good night": "Good night. Rest well, tomorrow we grind smarter.",
-        "tell me a joke": "Why did the programmer quit his job? He didn't get arrays.",
         "funny": "Error 404: Boredom not found. Let's laugh at life a bit!",
         "i am nervous": "Take a deep breath. You've trained for this. Step forward confidently.",
         "i am stressed": "Focus on one thing at a time. Small XP wins reduce stress.",
