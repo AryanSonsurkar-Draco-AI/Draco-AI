@@ -48,7 +48,15 @@
     .chip { padding:8px 12px; border-radius: 999px; border:1px solid var(--line); color:#c8d0df; background: #0f1218; cursor:pointer; }
     .chip:hover { background:#121623; }
     .log { margin-top: 8px; padding-right: 4px; padding-bottom: 8px; display:flex; flex-direction:column; gap:8px; }
-    .item { border-radius: 16px; padding:10px 14px; margin:0; max-width: 72%; line-height:1.5; display:inline-block; font-size:0.95rem; }
+    .chat-row { display:flex; align-items:flex-end; gap:8px; }
+    .chat-row-bot { justify-content:flex-start; }
+    .chat-row-user { justify-content:flex-end; }
+    .msg-avatar { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.8rem; font-weight:700; flex-shrink:0; box-shadow:0 0 10px rgba(0,0,0,.35); }
+    .bot-msg-avatar { background:#020617; color:#e5e7eb; }
+    .user-msg-avatar { background:#f97316; color:#111827; }
+    body.light-mode .bot-msg-avatar { background:#b30000; color:#fff5f5; }
+    body.light-mode .user-msg-avatar { background:#ffd24d; color:#7f1d1d; }
+    .item { border-radius: 16px; padding:10px 14px; margin:0; max-width: 72%; line-height:1.5; display:inline-block; font-size:0.95rem; position:relative; }
     /* Bot replies: darker than user for contrast */
     body.light-mode .item.bot-item {
       align-self:flex-start;
@@ -80,6 +88,13 @@
     .user { font-weight:500; }
     .bot { font-weight:500; }
     small { color:var(--muted); }
+    .msg-tools { display:flex; gap:6px; margin-top:4px; justify-content:flex-end; font-size:0.78rem; }
+    .msg-tools .edit-btn { background:transparent; border:none; color:var(--muted); cursor:pointer; padding:0; }
+    .msg-tools .edit-btn:hover { color:var(--accent-2); }
+    .reactions { display:flex; gap:6px; margin-top:4px; font-size:0.78rem; align-items:center; }
+    .reactions .react-btn { background:transparent; border:1px solid rgba(148,163,184,.6); border-radius:999px; padding:3px 8px; cursor:pointer; color:var(--muted); }
+    .reactions .react-btn.reacted { background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.7); color:#22c55e; }
+    body.light-mode .reactions .react-btn { border-color:rgba(255,180,120,.7); }
     /* layout: sidebar + main */
     .layout { display:grid; grid-template-columns: 280px minmax(0,1fr); gap:20px; align-items:stretch; }
     .side { background: var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; overflow:auto; display:flex; flex-direction:column; gap:12px; }
@@ -187,6 +202,18 @@
     body.dark-mode .chat-hero-title { color:#ffffff; }
     body.light-mode .chat-hero-title { color:#ff0000; }
     .chat-hero-sub { font-size:1rem; }
+
+    /* Typing indicator */
+    .typing-indicator { margin-top:4px; display:none; align-items:center; gap:6px; color:var(--muted); font-size:0.9rem; }
+    .typing-indicator-text { opacity:0.9; }
+    .typing-dots { display:flex; gap:3px; }
+    .typing-dot { width:6px; height:6px; border-radius:50%; background:var(--muted); opacity:0.3; animation: typingBlink 1s infinite ease-in-out; }
+    .typing-dot:nth-child(2) { animation-delay:0.15s; }
+    .typing-dot:nth-child(3) { animation-delay:0.3s; }
+    @keyframes typingBlink {
+      0%,100% { opacity:0.2; transform:translateY(0); }
+      50% { opacity:1; transform:translateY(-2px); }
+    }
 
     /* Sidebar glass */
     .side { background: var(--card); backdrop-filter: blur(12px); box-shadow: 0 0 24px rgba(0,0,0,.25), inset 0 0 0 1px var(--line); }
@@ -419,6 +446,14 @@
           <div class="chat-hero-sub">Ask anything to get started.</div>
         </div>
         <div class="log" id="log"></div>
+        <div id="typingIndicator" class="typing-indicator">
+          <span class="typing-indicator-text">Draco is thinking</span>
+          <div class="typing-dots">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+          </div>
+        </div>
         <div class="input" style="margin-top:12px;">
           <input id="input" type="text" placeholder="Type a command (e.g., open youtube, play music, take note ...)" />
           <button class="btn" id="quickActionsBtn" style="white-space:nowrap;" title="Quick Actions">+</button>
@@ -499,6 +534,7 @@
     const statusText = document.getElementById('statusText');
     const chatHero = document.getElementById('chatHero');
     const heroGreeting = document.getElementById('heroGreeting');
+    const typingIndicator = document.getElementById('typingIndicator');
     const loginEmail = document.getElementById('loginEmail');
     const loginBtn = document.getElementById('loginBtn');
     const loginCode = document.getElementById('loginCode');
@@ -530,6 +566,8 @@
     let user = { logged_in: false, email: null, profile: {} };
     let historyItems = [];
     let chatsList = [];
+    let lastUserMsgEl = null;
+    let lastUserText = '';
     try {
       socket = io({ transports: ['websocket', 'polling'], withCredentials: false });
     } catch (e) {
@@ -538,12 +576,88 @@
 
     function hideHero(){ if (chatHero) chatHero.style.display = 'none'; }
 
+    function showTyping(on) {
+      if (!typingIndicator) return;
+      typingIndicator.style.display = on ? 'flex' : 'none';
+    }
+
     function appendItem(text, who='bot') {
-      const el = document.createElement('div');
-      el.className = 'item ' + (who === 'bot' ? 'bot-item' : 'user-item');
-      el.innerHTML = `<div class="${who}">${text}</div>`;
-      el.classList.add('fade-in');
-      log.appendChild(el);
+      const row = document.createElement('div');
+      row.className = 'chat-row ' + (who === 'bot' ? 'chat-row-bot' : 'chat-row-user');
+
+      // Avatar
+      const avatar = document.createElement('div');
+      avatar.className = 'msg-avatar ' + (who === 'bot' ? 'bot-msg-avatar' : 'user-msg-avatar');
+      avatar.textContent = who === 'bot' ? 'D' : 'You';
+
+      const bubble = document.createElement('div');
+      bubble.className = 'item ' + (who === 'bot' ? 'bot-item' : 'user-item');
+      bubble.innerHTML = `<div class="${who}">${text}</div>`;
+
+      // User tools: edit/resend last message
+      if (who === 'user') {
+        const tools = document.createElement('div');
+        tools.className = 'msg-tools';
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'edit-btn';
+        editBtn.textContent = 'Edit & resend';
+        editBtn.onclick = () => {
+          try {
+            const raw = bubble.querySelector('.user')?.textContent || '';
+            input.value = raw;
+            input.focus();
+          } catch (e) {}
+        };
+        tools.appendChild(editBtn);
+        bubble.appendChild(tools);
+
+        lastUserMsgEl = bubble;
+        lastUserText = text;
+      }
+
+      // Bot reactions
+      if (who === 'bot') {
+        const reactions = document.createElement('div');
+        reactions.className = 'reactions';
+        const label = document.createElement('span');
+        label.textContent = 'Was this helpful?';
+
+        const up = document.createElement('button');
+        up.type = 'button';
+        up.className = 'react-btn';
+        up.textContent = '👍';
+
+        const down = document.createElement('button');
+        down.type = 'button';
+        down.className = 'react-btn';
+        down.textContent = '👎';
+
+        up.onclick = () => {
+          up.classList.toggle('reacted', true);
+          down.classList.toggle('reacted', false);
+        };
+        down.onclick = () => {
+          down.classList.toggle('reacted', true);
+          up.classList.toggle('reacted', false);
+        };
+
+        reactions.appendChild(label);
+        reactions.appendChild(up);
+        reactions.appendChild(down);
+        bubble.appendChild(reactions);
+      }
+
+      if (who === 'bot') {
+        row.appendChild(avatar);
+        row.appendChild(bubble);
+      } else {
+        row.appendChild(bubble);
+        row.appendChild(avatar);
+      }
+
+      row.classList.add('fade-in');
+      log.appendChild(row);
       hideHero();
       try {
         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
@@ -645,13 +759,38 @@
 
     stopSpeakBtn.onclick = () => window.speechSynthesis.cancel();
 
+    function maybeAddFollowup(botText) {
+      try {
+        const plain = String(botText || '');
+        if (plain.length < 220) return;
+        if (Math.random() > 0.25) return; // 25% chance
+        const followups = [
+          "Want me to break that down into simpler steps?",
+          "If you like, I can turn this into a quick to-do list.",
+          "Need an example or a shorter version of that?",
+          "We can make a mini-plan out of this. Want to?",
+          "If you're stuck, I can re-explain it in a different way."
+        ];
+        const line = followups[Math.floor(Math.random() * followups.length)];
+        appendItem(line, 'bot');
+      } catch (e) {}
+    }
+
     async function sendCommand(text) {
       if (!text) return;
       appendItem(text, 'user');
-      hideError(); setBusy(true);
+      hideError();
+      setBusy(true);
+      showTyping(true);
       // Prefer socket if connected
       if (socket && socket.connected) {
-        try { socket.emit('user_command', { text }); setBusy(false); return; } catch (e) { setBusy(false); }
+        try {
+          socket.emit('user_command', { text });
+          return;
+        } catch (e) {
+          setBusy(false);
+          showTyping(false);
+        }
       }
       // Fallback to HTTP
       try {
@@ -661,6 +800,7 @@
         });
         const data = await r.json();
         setBusy(false);
+        showTyping(false);
         if (data && data.action === 'open_url' && data.url) {
           try { window.open(data.url, '_blank'); } catch (e) {}
         }
@@ -668,6 +808,7 @@
         if (t) {
           appendItem(t, 'bot');
           speakText(t);
+          maybeAddFollowup(t);
         }
         if (data && Array.isArray(data.sources_labeled) && data.sources_labeled.length) {
           const list = data.sources_labeled.map(s => `<a href="${s.url}" target="_blank" rel="noopener noreferrer">${s.label}</a>`).join(' | ');
@@ -675,6 +816,7 @@
         }
       } catch (e) {
         setBusy(false);
+        showTyping(false);
         showError('Request failed. Please retry.', ()=> sendCommand(text));
       }
     }
@@ -827,11 +969,13 @@
         if (text) {
           appendItem(text, 'bot');
           speakText(text);
+          maybeAddFollowup(text);
         }
         if (data && Array.isArray(data.sources_labeled) && data.sources_labeled.length) {
           const list = data.sources_labeled.map(s => `<a href="${s.url}" target="_blank" rel="noopener noreferrer">${s.label}</a>`).join(' | ');
           appendItem('Sources: ' + list, 'bot');
         }
+        showTyping(false);
       });
     } else {
       statusText.textContent = 'HTTP mode';
@@ -1285,6 +1429,27 @@
         uploadBtn.click();
       });
     }
+
+    // Daily motivation (once per day)
+    (function(){
+      const KEY = 'draco-motivation-date';
+      try {
+        const today = new Date().toISOString().slice(0,10);
+        const last = localStorage.getItem(KEY);
+        if (last !== today) {
+          const lines = [
+            'New day, new XP. Even 30 focused minutes today will move you forward.',
+            'Tiny consistent steps beat random big bursts. What shall we tackle first?',
+            'You showed up. That already puts you ahead of who you were yesterday.',
+            'Let’s make at least one thing today that Future You will be proud of.',
+            'No pressure for perfection—just progress. I’m here with you.'
+          ];
+          const msg = lines[Math.floor(Math.random()*lines.length)];
+          appendItem(msg, 'bot');
+          localStorage.setItem(KEY, today);
+        }
+      } catch (e) {}
+    })();
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
