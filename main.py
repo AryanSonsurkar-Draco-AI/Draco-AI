@@ -1353,6 +1353,70 @@ def process_command(raw_cmd: str):
         speak(msg)
         return msg
 
+    # Generate PPT/DOC/PDF/notes from a topic (research helpers)
+    if cmd.startswith("generate ppt on ") or cmd.startswith("create ppt on "):
+        topic = cmd.replace("generate ppt on ", "", 1).replace("create ppt on ", "", 1).strip()
+        if not topic:
+            return "Please provide a topic for the PPT."
+        # reuse web research
+        points, _ = research_query_to_texts_with_sources(topic, limit=8)
+        try:
+            path = _generate_pptx(f"{topic.title()} - Slides", points)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            speak("Your slides are ready, I've created a download link.")
+            return {"text": f"Generated slides for {topic}. Download: {url}", "action": "open_url", "url": url}
+        except Exception as e:
+            return f"Could not generate PPT: {e}"
+
+    if cmd.startswith("generate doc on ") or cmd.startswith("create doc on "):
+        topic = cmd.replace("generate doc on ", "", 1).replace("create doc on ", "", 1).strip()
+        if not topic:
+            return "Please provide a topic for the document."
+        points = research_query_to_texts(topic, limit=10)
+        try:
+            path = _generate_docx(f"{topic.title()} - Notes", points)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            speak("Your document is ready, I've created a download link.")
+            return {"text": f"Generated DOCX for {topic}. Download: {url}", "action": "open_url", "url": url}
+        except Exception as e:
+            return f"Could not generate DOCX: {e}"
+
+    if cmd.startswith("generate pdf on ") or cmd.startswith("create pdf on "):
+        topic = cmd.replace("generate pdf on ", "", 1).replace("create pdf on ", "", 1).strip()
+        if not topic:
+            return "Please provide a topic for the PDF."
+        points, sources = research_query_to_texts_with_sources(topic, limit=12)
+        try:
+            path = _generate_pdf(f"{topic.title()} - Report", points, sources=sources)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            speak("Your PDF report is ready, I've created a download link.")
+            return {"text": f"Generated PDF for {topic}. Download: {url}", "action": "open_url", "url": url}
+        except Exception as e:
+            return f"Could not generate PDF: {e}"
+
+    if cmd.startswith("generate notes on ") or cmd.startswith("create notes on "):
+        topic = cmd.replace("generate notes on ", "", 1).replace("create notes on ", "", 1).strip()
+        if not topic:
+            return "Please provide a topic for the notes."
+        points, sources = research_query_to_texts_with_sources(topic, limit=10)
+        try:
+            lines = list(points)
+            if sources:
+                lines.append("")
+                lines.append("Sources:")
+                for s in sources:
+                    lines.append(s)
+            path = _generate_docx(f"{topic.title()} - Study Notes", lines)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            speak("Your study notes are ready, I've created a download link.")
+            return {"text": f"Generated notes for {topic}. Download: {url}", "action": "open_url", "url": url}
+        except Exception as e:
+            return f"Could not generate notes: {e}"
+
     # Notes / reminders / study helpers
     if cmd.startswith("take note") or cmd.startswith("note "):
         note_text = cmd.replace("take note", "").replace("note", "").strip()
