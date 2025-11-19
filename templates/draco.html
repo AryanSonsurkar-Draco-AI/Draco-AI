@@ -138,7 +138,7 @@
       border: 1px solid rgba(0, 255, 255, 0.12);
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 14px;
       font-size: 0.85rem;
       color: #c7f9ff;
     }
@@ -147,11 +147,18 @@
       display: none;
     }
 
+    .pomodoro-visuals {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
     .pomodoro-cup {
-      width: 32px;
-      height: 32px;
+      width: 34px;
+      height: 34px;
       border-radius: 50%;
-      background: conic-gradient(from 270deg, #ffb347 0, #ffb347 var(--pomo-fill, 0%), rgba(0, 0, 0, 0.35) var(--pomo-fill, 0%));
+      background: conic-gradient(from 270deg, #ffb347 0, #ffb347 var(--pomo-fill, 0%), rgba(0, 0, 0, 0.4) var(--pomo-fill, 0%));
       display: flex;
       align-items: center;
       justify-content: center;
@@ -169,6 +176,60 @@
 
     .pomodoro-body {
       flex: 1;
+    }
+
+    .pomodoro-clock {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid rgba(0, 255, 255, 0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.95rem;
+      color: #fff;
+      box-shadow: 0 0 16px rgba(0, 0, 0, 0.7);
+      animation: pomodoro-tick 1.2s ease-in-out infinite;
+      background: rgba(0, 0, 0, 0.35);
+    }
+
+    .pomodoro-clock.paused {
+      animation-play-state: paused;
+      opacity: 0.55;
+    }
+
+    .pomodoro-clock.flash {
+      animation: pomodoro-flash 0.8s ease forwards;
+    }
+
+    @keyframes pomodoro-tick {
+      0% {
+        transform: rotate(-6deg) scale(0.96);
+      }
+
+      50% {
+        transform: rotate(0deg) scale(1.02);
+      }
+
+      100% {
+        transform: rotate(6deg) scale(0.96);
+      }
+    }
+
+    @keyframes pomodoro-flash {
+      0% {
+        box-shadow: 0 0 12px rgba(124, 255, 199, 0.3);
+      }
+
+      50% {
+        box-shadow: 0 0 28px rgba(124, 255, 199, 0.9);
+        transform: scale(1.1);
+      }
+
+      100% {
+        box-shadow: 0 0 8px rgba(0, 0, 0, 0.7);
+        transform: scale(1);
+      }
     }
 
     .pomodoro-row {
@@ -215,6 +276,49 @@
       background: linear-gradient(90deg, #00f0ff, #7cffc7);
       box-shadow: 0 0 14px rgba(0, 255, 255, 0.4);
       transition: width 280ms linear;
+    }
+
+    .pomodoro-history {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(0, 255, 255, 0.08);
+      background: rgba(0, 0, 0, 0.25);
+      box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.6);
+    }
+
+    .pomodoro-history.hidden {
+      display: none;
+    }
+
+    .pomodoro-history-title {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    #pomodoroHistoryList {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    #pomodoroHistoryList li {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: #d9faff;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    #pomodoroHistoryList li:last-child {
+      border-bottom: none;
     }
 
     /* MAIN */
@@ -368,7 +472,10 @@
           <div>Client: <span id="clientStatus">Disconnected</span></div>
         </div>
         <div id="pomodoroWidget" class="pomodoro hidden">
-          <div class="pomodoro-cup" id="pomodoroCup"></div>
+          <div class="pomodoro-visuals">
+            <div class="pomodoro-cup" id="pomodoroCup"></div>
+            <div class="pomodoro-clock paused" id="pomodoroClock">🕒</div>
+          </div>
           <div class="pomodoro-body">
             <div class="pomodoro-row">
               <div class="pomodoro-label">Pomodoro</div>
@@ -382,6 +489,10 @@
               <div class="pomodoro-bar-fill" id="pomodoroBar"></div>
             </div>
           </div>
+        </div>
+        <div id="pomodoroHistory" class="pomodoro-history hidden">
+          <div class="pomodoro-history-title">Recent sessions</div>
+          <ul id="pomodoroHistoryList"></ul>
         </div>
       </div>
     </aside>
@@ -424,9 +535,14 @@
     const pomodoroTimeEl = document.getElementById("pomodoroTime");
     const pomodoroEtaEl = document.getElementById("pomodoroEta");
     const pomodoroBarEl = document.getElementById("pomodoroBar");
+    const pomodoroClockEl = document.getElementById("pomodoroClock");
+    const pomodoroHistoryEl = document.getElementById("pomodoroHistory");
+    const pomodoroHistoryListEl = document.getElementById("pomodoroHistoryList");
 
     const MEMORY_KEY = "draco_memory_v2";
     const MAX_MEMORY = 40;
+    const POMODORO_HISTORY_KEY = "draco_pomodoro_history_v1";
+    const MAX_HISTORY_ENTRIES = 5;
 
     const pomodoroState = {
       active: false,
@@ -434,6 +550,56 @@
       total: 0,
       remaining: 0
     };
+
+    function setClockPaused(paused) {
+      if (!pomodoroClockEl) return;
+      pomodoroClockEl.classList.toggle("paused", !!paused);
+    }
+
+    function flashClock() {
+      if (!pomodoroClockEl) return;
+      pomodoroClockEl.classList.remove("flash");
+      void pomodoroClockEl.offsetWidth;
+      pomodoroClockEl.classList.add("flash");
+    }
+
+    function loadPomodoroHistory() {
+      try {
+        return JSON.parse(localStorage.getItem(POMODORO_HISTORY_KEY) || "[]");
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function savePomodoroHistory(entries) {
+      localStorage.setItem(POMODORO_HISTORY_KEY, JSON.stringify(entries));
+    }
+
+    function renderPomodoroHistory(entries = loadPomodoroHistory()) {
+      if (!pomodoroHistoryEl) return;
+      if (!entries.length) {
+        pomodoroHistoryEl.classList.add("hidden");
+        pomodoroHistoryListEl.innerHTML = "";
+        return;
+      }
+      pomodoroHistoryEl.classList.remove("hidden");
+      pomodoroHistoryListEl.innerHTML = "";
+      entries.forEach(item => {
+        const li = document.createElement("li");
+        const finished = new Date(item.finishedAt);
+        const timeStr = finished.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        li.innerHTML = `<span>${(item.mode || "POMO").toUpperCase()}</span><span>${formatMMSS(item.duration || 0)} · ${timeStr}</span>`;
+        pomodoroHistoryListEl.appendChild(li);
+      });
+    }
+
+    function addPomodoroHistoryEntry(entry) {
+      const history = loadPomodoroHistory();
+      history.unshift(entry);
+      const trimmed = history.slice(0, MAX_HISTORY_ENTRIES);
+      savePomodoroHistory(trimmed);
+      renderPomodoroHistory(trimmed);
+    }
 
     // helper functions
     function appendMessage(who, text) {
@@ -514,6 +680,7 @@
     function setPomodoroActive(on) {
       if (on) {
         pomodoroWidget.classList.remove("hidden");
+        setClockPaused(false);
       } else {
         pomodoroWidget.classList.add("hidden");
         pomodoroModeEl.innerText = "Idle";
@@ -521,6 +688,8 @@
         pomodoroEtaEl.innerText = "";
         pomodoroBarEl.style.width = "0%";
         pomodoroCup.style.setProperty("--pomo-fill", "0%");
+        setClockPaused(true);
+        pomodoroClockEl.classList.remove("flash");
       }
     }
 
@@ -544,6 +713,8 @@
       pomodoroState.remaining = pomodoroState.total;
       setPomodoroActive(true);
       updatePomodoroUI();
+      setClockPaused(false);
+      pomodoroClockEl.setAttribute("title", "Running");
       appendMessage("draco", `☕ ${pomodoroState.mode} timer started (${formatMMSS(pomodoroState.total)}).`);
     });
 
@@ -554,11 +725,19 @@
       pomodoroState.remaining = data.remaining_seconds ?? pomodoroState.remaining;
       setPomodoroActive(true);
       updatePomodoroUI();
+      setClockPaused(false);
     });
 
     socket.on("pomodoro_done", (data) => {
       pomodoroState.remaining = 0;
       updatePomodoroUI();
+      setClockPaused(true);
+      flashClock();
+      addPomodoroHistoryEntry({
+        mode: pomodoroState.mode || data.mode || "pomodoro",
+        duration: pomodoroState.total || data.total_seconds || 0,
+        finishedAt: new Date().toISOString(),
+      });
       setTimeout(() => setPomodoroActive(false), 1500);
       appendMessage("draco", "✅ Pomodoro finished! Take a short break.");
     });
@@ -566,14 +745,19 @@
     socket.on("pomodoro_stopped", () => {
       pomodoroState.active = false;
       setPomodoroActive(false);
+      setClockPaused(true);
       appendMessage("draco", "⏹️ Pomodoro stopped.");
     });
 
     socket.on("pomodoro_paused", () => {
+      setClockPaused(true);
+      pomodoroClockEl.setAttribute("title", "Paused");
       appendMessage("draco", "⏸️ Pomodoro paused.");
     });
 
     socket.on("pomodoro_resumed", () => {
+      setClockPaused(false);
+      pomodoroClockEl.setAttribute("title", "Running");
       appendMessage("draco", "▶️ Pomodoro resumed.");
     });
 
@@ -584,6 +768,7 @@
       pomodoroState.remaining = pomodoroState.total;
       setPomodoroActive(true);
       updatePomodoroUI();
+      setClockPaused(false);
       appendMessage("draco", "🔁 Pomodoro reset.");
     });
 
@@ -641,53 +826,53 @@
     });
 
     // mic (Web Speech API)
-if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const recognition = new SR();
-  recognition.lang = "en-IN";
-  recognition.continuous = false;
-  recognition.interimResults = false;
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognition = new SR();
+      recognition.lang = "en-IN";
+      recognition.continuous = false;
+      recognition.interimResults = false;
 
-  let recognizing = false;
+      let recognizing = false;
 
-  recognition.onstart = () => {
-    recognizing = true;
-    micBtn.innerText = "🎙️ Listening...";
-    setMode("listening");
-  };
+      recognition.onstart = () => {
+        recognizing = true;
+        micBtn.innerText = "🎙️ Listening...";
+        setMode("listening");
+      };
 
-  recognition.onend = () => {
-    recognizing = false;
-    micBtn.innerText = "🎙️";
-    setMode("idle");
-  };
+      recognition.onend = () => {
+        recognizing = false;
+        micBtn.innerText = "🎙️";
+        setMode("idle");
+      };
 
-  recognition.onerror = (e) => {
-    console.error("Speech error:", e);
-    micBtn.innerText = "🎙️ Error";
-    setTimeout(() => micBtn.innerText = "🎙️", 1500);
-  };
+      recognition.onerror = (e) => {
+        console.error("Speech error:", e);
+        micBtn.innerText = "🎙️ Error";
+        setTimeout(() => micBtn.innerText = "🎙️", 1500);
+      };
 
-  recognition.onresult = (evt) => {
-    const text = evt.results[0][0].transcript.trim();
-    sendCommand(text);
-  };
+      recognition.onresult = (evt) => {
+        const text = evt.results[0][0].transcript.trim();
+        sendCommand(text);
+      };
 
-  micBtn.addEventListener("click", () => {
-    if (recognizing) {
-      recognition.stop();
-      return;
+      micBtn.addEventListener("click", () => {
+        if (recognizing) {
+          recognition.stop();
+          return;
+        }
+        try {
+          recognition.start();
+        } catch (err) {
+          console.warn("Recognition already active:", err);
+        }
+      });
+    } else {
+      micBtn.style.display = "none";
+      appendMessage("draco", "🎤 Voice recognition not supported on this browser.");
     }
-    try {
-      recognition.start();
-    } catch (err) {
-      console.warn("Recognition already active:", err);
-    }
-  });
-} else {
-  micBtn.style.display = "none";
-  appendMessage("draco", "🎤 Voice recognition not supported on this browser.");
-}
 
     // memory clear
     clearMemory.addEventListener("click", () => {
@@ -697,6 +882,7 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
 
     // init
     renderMemory();
+    renderPomodoroHistory();
     appendMessage("draco", "Draco Dashboard ready. Type or speak to start.");
 
   </script>

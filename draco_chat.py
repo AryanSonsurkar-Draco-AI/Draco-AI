@@ -2,7 +2,8 @@ import os
 import re
 import time
 import random
-from typing import Dict, Any, Tuple, List
+from datetime import datetime
+from typing import Dict, Any, Tuple, List, Optional
 
 # Simple in-memory context per session (can be expanded)
 class ChatContext:
