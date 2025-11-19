@@ -129,6 +129,94 @@
       margin-top: 10px
     }
 
+    /* Pomodoro widget */
+    .pomodoro {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: radial-gradient(circle at top left, rgba(0, 255, 255, 0.12), transparent 55%);
+      border: 1px solid rgba(0, 255, 255, 0.12);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.85rem;
+      color: #c7f9ff;
+    }
+
+    .pomodoro.hidden {
+      display: none;
+    }
+
+    .pomodoro-cup {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: conic-gradient(from 270deg, #ffb347 0, #ffb347 var(--pomo-fill, 0%), rgba(0, 0, 0, 0.35) var(--pomo-fill, 0%));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 18px rgba(0, 0, 0, 0.8);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pomodoro-cup::after {
+      content: "☕";
+      position: absolute;
+      font-size: 20px;
+      filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.8));
+    }
+
+    .pomodoro-body {
+      flex: 1;
+    }
+
+    .pomodoro-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .pomodoro-label {
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    .pomodoro-mode {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .pomodoro-time {
+      font-variant-numeric: tabular-nums;
+      font-size: 0.9rem;
+    }
+
+    .pomodoro-bar {
+      position: relative;
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.55);
+      overflow: hidden;
+    }
+
+    .pomodoro-bar-fill {
+      position: absolute;
+      inset: 0;
+      width: 0;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #00f0ff, #7cffc7);
+      box-shadow: 0 0 14px rgba(0, 255, 255, 0.4);
+      transition: width 280ms linear;
+    }
+
     /* MAIN */
     .main {
       flex: 1;
@@ -279,6 +367,22 @@
           <div>Host: <span id="host">ws://localhost:8765</span></div>
           <div>Client: <span id="clientStatus">Disconnected</span></div>
         </div>
+        <div id="pomodoroWidget" class="pomodoro hidden">
+          <div class="pomodoro-cup" id="pomodoroCup"></div>
+          <div class="pomodoro-body">
+            <div class="pomodoro-row">
+              <div class="pomodoro-label">Pomodoro</div>
+              <div class="pomodoro-mode" id="pomodoroMode">Idle</div>
+            </div>
+            <div class="pomodoro-row">
+              <div class="pomodoro-time" id="pomodoroTime">--:--</div>
+              <div class="pomodoro-time" id="pomodoroEta"></div>
+            </div>
+            <div class="pomodoro-bar">
+              <div class="pomodoro-bar-fill" id="pomodoroBar"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </aside>
 
@@ -299,7 +403,7 @@
       </footer>
     </main>
   </div>
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script>
     /* Draco Flask Dashboard — Pure Flask-SocketIO version */
 
@@ -313,9 +417,23 @@
     const memoryList = document.getElementById("memoryList");
     const clearMemory = document.getElementById("clearMemory");
     const modeBadge = document.getElementById("modeBadge");
+    const clientStatus = document.getElementById("clientStatus");
+    const pomodoroWidget = document.getElementById("pomodoroWidget");
+    const pomodoroCup = document.getElementById("pomodoroCup");
+    const pomodoroModeEl = document.getElementById("pomodoroMode");
+    const pomodoroTimeEl = document.getElementById("pomodoroTime");
+    const pomodoroEtaEl = document.getElementById("pomodoroEta");
+    const pomodoroBarEl = document.getElementById("pomodoroBar");
 
     const MEMORY_KEY = "draco_memory_v2";
     const MAX_MEMORY = 40;
+
+    const pomodoroState = {
+      active: false,
+      mode: null,
+      total: 0,
+      remaining: 0
+    };
 
     // helper functions
     function appendMessage(who, text) {
@@ -365,24 +483,152 @@
 
     // SocketIO listeners
     socket.on("connect", () => {
+      clientStatus.innerText = "Connected";
       appendMessage("draco", "Connected to Draco Flask server ✅");
     });
 
     socket.on("draco_response", (data) => {
-  appendMessage("draco", data.text);
-  saveMemory("Draco: " + data.text);
-  setMode("speaking");
+      appendMessage("draco", data.text);
+      saveMemory("Draco: " + data.text);
+      setMode("speaking");
 
-  // Speak aloud
-  if ('speechSynthesis' in window) {
-    // const utterance = new SpeechSynthesisUtterance(data.text);
-// speechSynthesis.speak(utterance);
-  }
+      // Speak aloud (optional)
+      if ('speechSynthesis' in window) {
+        // You can enable browser TTS here if desired.
+        // const utterance = new SpeechSynthesisUtterance(data.text);
+        // speechSynthesis.speak(utterance);
+      }
 
-  setTimeout(() => setMode("idle"), 700);
-});
+      setTimeout(() => setMode("idle"), 700);
+    });
+
+    // ----- Pomodoro visualisation -----
+
+    function formatMMSS(sec) {
+      const s = Math.max(0, sec | 0);
+      const m = Math.floor(s / 60);
+      const r = s % 60;
+      return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
+    }
+
+    function setPomodoroActive(on) {
+      if (on) {
+        pomodoroWidget.classList.remove("hidden");
+      } else {
+        pomodoroWidget.classList.add("hidden");
+        pomodoroModeEl.innerText = "Idle";
+        pomodoroTimeEl.innerText = "--:--";
+        pomodoroEtaEl.innerText = "";
+        pomodoroBarEl.style.width = "0%";
+        pomodoroCup.style.setProperty("--pomo-fill", "0%");
+      }
+    }
+
+    function updatePomodoroUI() {
+      if (!pomodoroState.active || !pomodoroState.total) return;
+      const { total, remaining, mode } = pomodoroState;
+      const progress = Math.min(1, Math.max(0, 1 - remaining / total));
+      const pct = (progress * 100).toFixed(1) + "%";
+
+      pomodoroModeEl.innerText = (mode || "pomodoro").toUpperCase();
+      pomodoroTimeEl.innerText = formatMMSS(remaining);
+      pomodoroEtaEl.innerText = remaining > 0 ? `~${Math.ceil(remaining / 60)} min left` : "Done";
+      pomodoroBarEl.style.width = pct;
+      pomodoroCup.style.setProperty("--pomo-fill", pct);
+    }
+
+    socket.on("pomodoro_started", (data) => {
+      pomodoroState.active = true;
+      pomodoroState.mode = data.mode || "pomodoro";
+      pomodoroState.total = data.total_seconds || 0;
+      pomodoroState.remaining = pomodoroState.total;
+      setPomodoroActive(true);
+      updatePomodoroUI();
+      appendMessage("draco", `☕ ${pomodoroState.mode} timer started (${formatMMSS(pomodoroState.total)}).`);
+    });
+
+    socket.on("pomodoro_tick", (data) => {
+      pomodoroState.active = true;
+      pomodoroState.mode = data.mode || pomodoroState.mode || "pomodoro";
+      pomodoroState.total = data.total_seconds || pomodoroState.total;
+      pomodoroState.remaining = data.remaining_seconds ?? pomodoroState.remaining;
+      setPomodoroActive(true);
+      updatePomodoroUI();
+    });
+
+    socket.on("pomodoro_done", (data) => {
+      pomodoroState.remaining = 0;
+      updatePomodoroUI();
+      setTimeout(() => setPomodoroActive(false), 1500);
+      appendMessage("draco", "✅ Pomodoro finished! Take a short break.");
+    });
+
+    socket.on("pomodoro_stopped", () => {
+      pomodoroState.active = false;
+      setPomodoroActive(false);
+      appendMessage("draco", "⏹️ Pomodoro stopped.");
+    });
+
+    socket.on("pomodoro_paused", () => {
+      appendMessage("draco", "⏸️ Pomodoro paused.");
+    });
+
+    socket.on("pomodoro_resumed", () => {
+      appendMessage("draco", "▶️ Pomodoro resumed.");
+    });
+
+    socket.on("pomodoro_reset", (data) => {
+      pomodoroState.active = true;
+      pomodoroState.mode = data.mode || "pomodoro";
+      pomodoroState.total = data.total_seconds || 0;
+      pomodoroState.remaining = pomodoroState.total;
+      setPomodoroActive(true);
+      updatePomodoroUI();
+      appendMessage("draco", "🔁 Pomodoro reset.");
+    });
+
+    // simple beeps using Web Audio
+    let audioCtx = null;
+    function playBeep(kind) {
+      try {
+        audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      } catch (e) {
+        return; // audio not supported
+      }
+      const ctx = audioCtx;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      let freq = 880;
+      let duration = 0.12;
+      if (kind === "pomodoro_start") {
+        freq = 980;
+        duration = 0.18;
+      } else if (kind === "pomodoro_end") {
+        freq = 660;
+        duration = 0.25;
+      } else if (kind === "tick") {
+        freq = 520;
+        duration = 0.05;
+      }
+
+      osc.frequency.value = freq;
+      gain.gain.value = 0.08;
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      const now = ctx.currentTime;
+      osc.start(now);
+      osc.stop(now + duration);
+    }
+
+    socket.on("play_beep", (data) => {
+      playBeep(data && data.kind);
+    });
 
     socket.on("disconnect", () => {
+      clientStatus.innerText = "Disconnected";
       appendMessage("draco", "Disconnected from Flask server ❌");
     });
 
