@@ -152,8 +152,57 @@
 
     /* global bg */
     body.dark-mode,
-    body.light-mode {
+    body.light-mode,
+    body.theme-neon-blue,
+    body.theme-dark-dragon,
+    body.theme-light-minimal,
+    body.theme-purple-cyber {
       background: linear-gradient(180deg, var(--bg-start), var(--bg-end));
+    }
+
+    /* Theme variants */
+    body.theme-neon-blue {
+      --bg-start: #020617;
+      --bg-end: #020617;
+      --card: rgba(15, 23, 42, 0.9);
+      --accent: #22d3ee;
+      --accent-2: #38bdf8;
+      --text: #e0f2fe;
+      --muted: #64748b;
+      --line: rgba(56, 189, 248, 0.4);
+    }
+
+    body.theme-dark-dragon {
+      --bg-start: #020617;
+      --bg-end: #111827;
+      --card: rgba(15, 23, 42, 0.95);
+      --accent: #f97316;
+      --accent-2: #facc15;
+      --text: #f9fafb;
+      --muted: #9ca3af;
+      --line: rgba(148, 163, 184, 0.5);
+    }
+
+    body.theme-light-minimal {
+      --bg-start: #f9fafb;
+      --bg-end: #e5e7eb;
+      --card: #ffffff;
+      --accent: #2563eb;
+      --accent-2: #22c55e;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: rgba(148, 163, 184, 0.6);
+    }
+
+    body.theme-purple-cyber {
+      --bg-start: #2e026d;
+      --bg-end: #0f172a;
+      --card: rgba(15, 23, 42, 0.9);
+      --accent: #a855f7;
+      --accent-2: #22d3ee;
+      --text: #f9fafb;
+      --muted: #a5b4fc;
+      --line: rgba(129, 140, 248, 0.6);
     }
     /* Force red text across UI in light mode */
     body.light-mode,
@@ -382,6 +431,40 @@
       <button class="btn" id="toggleSide">Hide Sidebar</button>
       <button class="btn" id="expandSide">Expand</button>
     </div>
+  <div id="commandsSidebar" style="position:fixed; right:-320px; top:0; bottom:0; width:300px; max-width:80vw; background:rgba(15,23,42,0.98); border-left:1px solid var(--line); box-shadow:-8px 0 24px rgba(0,0,0,0.5); padding:14px; z-index:60; display:flex; flex-direction:column; gap:10px; transition:transform 0.25s ease; transform:translateX(0);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+      <div style="font-weight:600;">Commands</div>
+      <button class="btn" id="commandsCloseBtn" style="padding:4px 8px; font-size:11px;">Close</button>
+    </div>
+    <div id="commandsSummary" style="font-size:12px; color:var(--muted);"></div>
+    <div style="font-weight:600; font-size:12px;">Pomodoro</div>
+    <div style="display:flex; flex-wrap:wrap; gap:6px;">
+      <button class="chip" data-cmd="let's start studying">Start Session</button>
+      <button class="chip" data-cmd="mini pomodoro">Mini</button>
+      <button class="chip" data-cmd="focus sprint">Focus Sprint</button>
+      <button class="chip" data-cmd="stop timer">Stop</button>
+    </div>
+    <div style="font-weight:600; font-size:12px; margin-top:6px;">Todos</div>
+    <div style="font-size:12px; color:var(--muted);">Use commands like:<br>/todo add finish homework<br>/todo list<br>/todo done &lt;id&gt;</div>
+    <div style="font-weight:600; font-size:12px; margin-top:6px;">Shortcuts</div>
+    <div style="display:flex; flex-wrap:wrap; gap:6px;">
+      <button class="chip" data-cmd="open youtube">Open YouTube</button>
+      <button class="chip" data-cmd="play music">Play Music</button>
+      <button class="chip" data-cmd="take note buy milk">Take Note</button>
+      <button class="chip" data-cmd="set reminder to drink water at 19:30">Set Reminder</button>
+    </div>
+    <div style="font-weight:600; font-size:12px; margin-top:6px;">Links</div>
+    <div style="display:flex; flex-direction:column; gap:4px; font-size:12px;">
+      <a href="https://github.com" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a href="https://render.com" target="_blank" rel="noopener noreferrer">Render</a>
+      <a href="https://youtube.com" target="_blank" rel="noopener noreferrer">YouTube</a>
+    </div>
+  </div>
+
+  <audio id="sfxPomodoroStart" src="/static/audio/pomodoro_start.mp3" preload="auto"></audio>
+  <audio id="sfxPomodoroEnd" src="/static/audio/pomodoro_end.mp3" preload="auto"></audio>
+  <audio id="sfxLevelUp" src="/static/audio/level_up.mp3" preload="auto"></audio>
+  <audio id="sfxTaskDone" src="/static/audio/task_done.mp3" preload="auto"></audio>
     <div class="layout" id="layout">
       <div class="side" id="sidebar">
         <button class="btn side-close-btn" id="sideCloseBtn" aria-label="Close sidebar">✕</button>
@@ -399,14 +482,22 @@
           <button class="btn" id="newChatBtn" style="flex:1; padding:8px 10px; font-size:12px;">New Chat</button>
           <button class="btn" id="clearChatBtn" style="flex:1; padding:8px 10px; font-size:12px;">Clear</button>
         </div>
-        <div class="themeToggle" style="margin-top:4px;">
-          <div style="font-weight:600;">Theme</div>
-          <div class="toggleSwitch" style="display:flex; align-items:center; gap:8px;">
-            <input type="checkbox" id="themeCheckbox" style="position:absolute; opacity:0; width:0; height:0;" />
-            <label for="themeCheckbox" class="theme-toggle" aria-label="Toggle theme">
-              <span class="slider"></span>
-            </label>
+        <div class="themeToggle" style="margin-top:4px; flex-direction:column; align-items:flex-start; gap:6px;">
+          <div style="display:flex; width:100%; align-items:center; justify-content:space-between; gap:8px;">
+            <div style="font-weight:600;">Theme</div>
+            <div class="toggleSwitch" style="display:flex; align-items:center; gap:8px;">
+              <input type="checkbox" id="themeCheckbox" style="position:absolute; opacity:0; width:0; height:0;" />
+              <label for="themeCheckbox" class="theme-toggle" aria-label="Toggle theme">
+                <span class="slider"></span>
+              </label>
+            </div>
           </div>
+          <select id="themeSelect" style="margin-top:6px; width:100%; padding:6px 10px; border-radius:10px; border:1px solid var(--line); background:rgba(15,23,42,0.9); color:var(--text); font-size:12px;">
+            <option value="theme-neon-blue">Neon Blue</option>
+            <option value="theme-dark-dragon">Dark Dragon</option>
+            <option value="theme-light-minimal">Light Minimal</option>
+            <option value="theme-purple-cyber">Purple Cyber</option>
+          </select>
         </div>
         <!-- Quick Actions moved to bottom sheet -->
         <div class="history" id="history"></div>
@@ -818,8 +909,42 @@
 
         if (lastGamestateLevel !== null && lvl > lastGamestateLevel) {
           appendItem('Level up! You reached Level ' + lvl + '.', 'bot');
+          addReaction('🎉');
+          playSfx('sfxLevelUp');
         }
         lastGamestateLevel = lvl;
+
+        // Daily quests
+        const daily = g.daily || {};
+        const quests = daily.quests || {};
+        const pq = quests.pomodoro2 || {};
+        const uq = quests.use5 || {};
+        const tq = quests.todos3 || {};
+
+        const pDone = daily.pomodoros_done || 0;
+        const cUsed = daily.commands_used || 0;
+        const tDone = daily.todos_done || 0;
+
+        let qc = document.getElementById('dailyQuests');
+        if (!qc) {
+          const progressCard = document.getElementById('progressCard');
+          if (progressCard) {
+            qc = document.createElement('div');
+            qc.id = 'dailyQuests';
+            qc.style.marginTop = '8px';
+            qc.style.fontSize = '12px';
+            qc.style.color = 'var(--muted)';
+            progressCard.appendChild(qc);
+          }
+        }
+        if (qc) {
+          qc.innerHTML = `
+            <div style="font-weight:600; margin-bottom:4px;">Daily quests</div>
+            <div>• Do 2 Pomodoros (${Math.min(pDone, 2)}/2) ${pq.done ? '✅' : ''}</div>
+            <div>• Use Draco 5 times (${Math.min(cUsed, 5)}/5) ${uq.done ? '✅' : ''}</div>
+            <div>• Complete 3 todos (${Math.min(tDone, 3)}/3) ${tq.done ? '✅' : ''}</div>
+          `;
+        }
       } catch (e) {
         // ignore errors
       }
@@ -905,6 +1030,15 @@
       gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
       osc.start(now);
       osc.stop(now + duration + 0.02);
+    }
+
+    function playSfx(id) {
+      try {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.currentTime = 0;
+        el.play().catch(() => {});
+      } catch (e) {}
     }
 
     async function sendCommand(text) {
@@ -1101,14 +1235,20 @@
           remaining_seconds: data && data.total_seconds,
           progress: 0,
         });
+        playSfx('sfxPomodoroStart');
       });
 
       socket.on('pomodoro_tick', (data) => {
         updatePomodoroUI(data || {});
       });
 
-      socket.on('pomodoro_done', () => {
+      socket.on('pomodoro_done', (data) => {
         hidePomodoroUI();
+        addReaction('🔥');
+        playSfx('sfxPomodoroEnd');
+        try {
+          recordFocusSession(data && data.mode);
+        } catch (e) {}
       });
 
       socket.on('pomodoro_paused', () => {
@@ -1135,6 +1275,30 @@
       socket.on('play_beep', (payload) => {
         const kind = payload && payload.kind || 'tick';
         playBeep(kind);
+      });
+
+      socket.on('reminder_fired', (payload) => {
+        const t = payload && payload.text ? String(payload.text) : '';
+        if (t) {
+          appendItem('⏰ ' + t, 'bot');
+          showReminderNotification(t);
+        } else {
+          showReminderNotification('Your reminder is here.');
+        }
+      });
+
+      socket.on('quest_completed', (payload) => {
+        const id = payload && payload.id;
+        const reward = payload && payload.reward;
+        let name = '';
+        if (id === 'pomodoro2') name = 'Do 2 Pomodoros';
+        else if (id === 'use5') name = 'Use Draco 5 times';
+        else if (id === 'todos3') name = 'Complete 3 todos';
+        const bonus = reward ? ` +${reward} XP` : '';
+        if (name) {
+          appendItem(`🎯 Quest completed: ${name}!${bonus}`, 'bot');
+        }
+        refreshGamestate();
       });
 
       function showReminderNotification(message) {
@@ -1307,18 +1471,19 @@
     // Theme checkbox toggle wiring with persistence
     const THEME_KEY = 'draco-theme';
     const themeCheckbox = document.getElementById('themeCheckbox');
+    const themeSelect = document.getElementById('themeSelect');
     function applyTheme(theme){
-      document.body.classList.remove('light-mode','dark-mode');
-      document.body.classList.add(theme);
+      const body = document.body;
+      body.classList.remove('theme-neon-blue','theme-dark-dragon','theme-light-minimal','theme-purple-cyber');
+      if (theme) body.classList.add(theme);
       try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
-      if (themeCheckbox) themeCheckbox.checked = (theme === 'light-mode');
+      if (themeSelect) themeSelect.value = theme || 'theme-neon-blue';
     }
-    const savedTheme = (function(){ try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; } })();
-    applyTheme(savedTheme || 'light-mode');
-    if (themeCheckbox) {
-      themeCheckbox.addEventListener('change', () => {
-        const next = themeCheckbox.checked ? 'light-mode' : 'dark-mode';
-        applyTheme(next);
+    const savedTheme = (function(){ try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; } })() || 'theme-neon-blue';
+    applyTheme(savedTheme);
+    if (themeSelect) {
+      themeSelect.addEventListener('change', () => {
+        applyTheme(themeSelect.value);
       });
     }
 

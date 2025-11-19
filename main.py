@@ -94,6 +94,11 @@ try:
     import draco_chat
 except Exception:
     draco_chat = None
+try:
+    import quests_todo
+except Exception:
+    quests_todo = None
+from draco_backend.pomodoro import create_pomodoro_manager
 
 ON_RENDER = os.environ.get("RENDER") is not None
 ON_SERVER = ON_RENDER or (os.environ.get("PORT") is not None) or (os.environ.get("RENDER_EXTERNAL_URL") is not None)
@@ -179,7 +184,6 @@ def _set_current_chat_id(cid: str):
 
 def _get_or_create_current_chat(email: str):
     chats = _load_chats(email)
-    cid = _current_chat_id()
     chat = None
     if cid:
         for c in chats:
@@ -354,10 +358,13 @@ def _ensure_gamification():
         g["last_action"] = None
     if "badges" not in g or not isinstance(g["badges"], list):
         g["badges"] = []
+    if "daily" not in g or not isinstance(g["daily"], dict):
+        g["daily"] = {}
+    if quests_todo:
+        quests_todo.ensure_daily_block(g)
     memory.long["gamification"] = g
     memory._save()
     return g
-
 
 def _xp_needed(level: int) -> int:
     try:
@@ -365,7 +372,6 @@ def _xp_needed(level: int) -> int:
     except Exception:
         lvl = 1
     return 50 + lvl * 20
-
 
 def add_xp(kind: str, amount: int):
     """Award XP for an action kind (study/coding/general)."""
@@ -393,7 +399,6 @@ def add_xp(kind: str, amount: int):
     memory.long["gamification"] = g
     memory._save()
 
-
 def get_gamestate():
     g = _ensure_gamification()
     lvl = int(g.get("level", 1))
@@ -407,8 +412,8 @@ def get_gamestate():
         "total_xp": int(g.get("total_xp", 0)),
         "badges": g.get("badges", []),
         "last_action": g.get("last_action"),
+        "daily": g.get("daily"),
     }
-
 
 def set_mode(mode: str):
     g = _ensure_gamification()
@@ -419,6 +424,13 @@ def set_mode(mode: str):
     memory.long["gamification"] = g
     memory._save()
     return m
+
+def bump_daily(kind: str):
+    g = _ensure_gamification()
+    if quests_todo:
+        quests_todo.bump_counter_and_check_quests(g, kind, add_xp, emit_to_ui)
+        memory.long["gamification"] = g
+        memory._save()
 
 # ------------- TTS (single speak implementation) -------------
 # On servers (Render/containers), avoid initializing pyttsx3 (needs eSpeak)
@@ -519,123 +531,17 @@ class ReminderManager:
                 self.remove(r["id"])
             time.sleep(6)
 
-
 notes_mgr = NotesManager()
 reminder_mgr = ReminderManager()
+todo_mgr = quests_todo.TodoManager() if quests_todo else None
 
 # ------------- Pomodoro / Focus Timers -------------
 
-class PomodoroState:
-    def __init__(self):
-        self.active = False
-        self.mode = None  # "pomodoro", "break", "mini", "focus"
-        self.total_seconds = 0
-        self.remaining_seconds = 0
-        self.paused = False
-        self.started_at = None
-
-
-class PomodoroManager:
-    def __init__(self):
-        self.state = PomodoroState()
-        self._lock = threading.Lock()
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
-
-    def start(self, seconds: int, mode: str):
-        with self._lock:
-            self.state.active = True
-            self.state.mode = mode
-            self.state.total_seconds = max(1, int(seconds))
-            self.state.remaining_seconds = self.state.total_seconds
-            self.state.paused = False
-            self.state.started_at = time.time()
-        emit_to_ui("pomodoro_started", {
-            "mode": mode,
-            "total_seconds": self.state.total_seconds,
-        })
-        emit_to_ui("play_beep", {"kind": "pomodoro_start"})
-
-    def stop(self):
-        with self._lock:
-            self.state = PomodoroState()
-        emit_to_ui("pomodoro_stopped", {})
-
-    def pause(self):
-        with self._lock:
-            if self.state.active:
-                self.state.paused = True
-        emit_to_ui("pomodoro_paused", {})
-
-    def resume(self):
-        with self._lock:
-            if self.state.active and self.state.paused:
-                self.state.paused = False
-        emit_to_ui("pomodoro_resumed", {})
-
-    def reset(self):
-        with self._lock:
-            if self.state.total_seconds > 0:
-                total = self.state.total_seconds
-                mode = self.state.mode or "pomodoro"
-            else:
-                total = 25 * 60
-                mode = "pomodoro"
-            self.state.active = True
-            self.state.mode = mode
-            self.state.remaining_seconds = total
-            self.state.paused = False
-            self.state.started_at = time.time()
-        emit_to_ui("pomodoro_reset", {
-            "mode": mode,
-            "total_seconds": total,
-        })
-
-    def get_status(self):
-        with self._lock:
-            st = self.state
-            return {
-                "active": st.active,
-                "mode": st.mode,
-                "total_seconds": st.total_seconds,
-                "remaining_seconds": st.remaining_seconds,
-                "paused": st.paused,
-            }
-
-    def _loop(self):
-        while True:
-            time.sleep(1)
-
-            with self._lock:
-                st = self.state
-                if not st.active or st.paused or st.remaining_seconds <= 0:
-                    continue
-                st.remaining_seconds -= 1
-                remaining = st.remaining_seconds
-                total = st.total_seconds or 1
-                mode = st.mode or "pomodoro"
-
-            # emit tick update outside lock
-            progress = max(0.0, min(1.0, 1.0 - (remaining / float(total))))
-            emit_to_ui("pomodoro_tick", {
-                "mode": mode,
-                "remaining_seconds": remaining,
-                "total_seconds": total,
-                "progress": progress,
-            })
-            emit_to_ui("play_beep", {"kind": "tick"})
-            if remaining <= 0:
-                final_text = "Pomodoro done! ☕ All gone! Take a short break 😎"
-                speak(final_text)
-                # push a chat message plus dedicated events for UI/sound
-                emit_to_ui("draco_response", {"text": final_text})
-                emit_to_ui("pomodoro_done", {"mode": mode})
-                emit_to_ui("play_beep", {"kind": "pomodoro_end"})
-                with self._lock:
-                    self.state = PomodoroState()
-
-
-pomodoro_mgr = PomodoroManager()
+pomodoro_mgr = create_pomodoro_manager(
+    socketio,
+    {"bump_daily": bump_daily},
+    logger=app.logger,
+)
 
 # ------------- System utilities -------------
 def system_status_summary():
@@ -1252,16 +1158,11 @@ def handle_small_talk(cmd: str) -> Optional[str]:
         speak(reply)
         return reply
 
-    return None
-
-
-# ------------- Command processing (central router) -------------
-def process_command(raw_cmd: str):
-    """Map raw user phrases to actions. Returns text or a small dict for web actions."""
-    if not raw_cmd:
-        return "Please say something."
-
-    cmd = raw_cmd.strip().lower()
+    # bump daily command counter for quests
+    try:
+        bump_daily("command")
+    except Exception:
+        pass
 
     # Save to session / history
     memory.add(f"You: {raw_cmd}")
@@ -1278,6 +1179,97 @@ def process_command(raw_cmd: str):
     small = handle_small_talk(cmd)
     if small is not None:
         return small
+
+    # ------------- Simple TODO system -------------
+
+    if cmd.startswith("/todo") or cmd.startswith("todo "):
+        if not todo_mgr:
+            txt = "Todo system is not available."
+            speak(txt)
+            return txt
+
+        parts = raw_cmd.strip().split(maxsplit=2)
+        if len(parts) < 2:
+            txt = "Usage: /todo add <task>, /todo list, /todo done <id>, /todo remove <id>."
+            speak(txt)
+            return txt
+
+        action = parts[1].lower()
+
+        if action == "add":
+            if len(parts) < 3 or not parts[2].strip():
+                txt = "Please provide a task description. Example: /todo add finish homework"
+                speak(txt)
+                return txt
+            text = parts[2].strip()
+            tid = todo_mgr.add(text)
+            add_xp("study", 5)
+            txt = f"Added todo #{tid}: {text}"
+            speak(txt)
+            return txt
+
+        if action == "list":
+            items = todo_mgr.list()
+            if not items:
+                txt = "Your todo list is empty."
+                speak(txt)
+                return txt
+            lines = ["Your todos:"]
+            for t in items:
+                mark = "x" if t.get("done") else " "
+                lines.append(f"[{t['id']}] ({mark}) {t['text']}")
+            txt = "\n".join(lines)
+            speak(txt)
+            return txt
+
+        if action == "done":
+            if len(parts) < 3:
+                txt = "Please provide the todo id. Example: /todo done 123456"
+                speak(txt)
+                return txt
+            try:
+                tid = int(parts[2])
+            except ValueError:
+                txt = "Todo id must be a number."
+                speak(txt)
+                return txt
+            t = todo_mgr.mark_done(tid)
+            if not t:
+                txt = f"Todo #{tid} not found."
+                speak(txt)
+                return txt
+            # base XP
+            add_xp("study", 6)
+            # bonus XP if an active non-break Pomodoro is running
+            st = pomodoro_mgr.get_status()
+            if st.get("active") and (st.get("mode") not in ("break", None)):
+                add_xp("study", 4)
+            try:
+                bump_daily("todo_done")
+            except Exception:
+                pass
+            txt = f"Marked todo #{tid} as done: {t['text']}"
+            speak(txt)
+            return txt
+
+        if action == "remove":
+            if len(parts) < 3:
+                txt = "Please provide the todo id. Example: /todo remove 123456"
+                speak(txt)
+                return txt
+            try:
+                tid = int(parts[2])
+            except ValueError:
+                txt = "Todo id must be a number."
+                speak(txt)
+                return txt
+            ok = todo_mgr.remove(tid)
+            if not ok:
+                txt = f"Todo #{tid} not found."
+            else:
+                txt = f"Removed todo #{tid}."
+            speak(txt)
+            return txt
 
     # ------------- Study / Pomodoro / Focus flows -------------
 
