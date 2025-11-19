@@ -1137,34 +1137,9 @@
         playBeep(kind);
       });
 
-      function showReminderNotification(message) {
-        if (!('Notification' in window)) return;
-        const text = message || 'Your reminder is here.';
-        if (Notification.permission === 'granted') {
-          try {
-            new Notification('Draco Reminder', { body: text });
-          } catch (e) {}
-        } else if (Notification.permission === 'default') {
-          try {
-            Notification.requestPermission().then((perm) => {
-              if (perm === 'granted') {
-                try {
-                  new Notification('Draco Reminder', { body: text });
-                } catch (e) {}
-              }
-            });
-          } catch (e) {}
-        }
-      }
-
       socket.on('reminder_fired', (payload) => {
         const t = payload && payload.text ? String(payload.text) : '';
-        if (t) {
-          appendItem('⏰ ' + t, 'bot');
-          showReminderNotification(t);
-        } else {
-          showReminderNotification('Your reminder is here.');
-        }
+        if (t) appendItem('⏰ ' + t, 'bot');
       });
     } else {
       statusText.textContent = 'HTTP mode';
