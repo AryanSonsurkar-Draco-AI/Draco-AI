@@ -185,16 +185,19 @@ def _set_current_chat_id(cid: str):
 def _get_or_create_current_chat(email: str):
     chats = _load_chats(email)
     chat = None
+    cid = _current_chat_id()
     if cid:
         for c in chats:
             if c.get("id") == cid:
                 chat = c
                 break
+
     if chat is None:
         # pick latest or create
         if chats:
             chats = sorted(chats, key=lambda c: c.get("updated_at", 0), reverse=True)
             chat = chats[0]
+            cid = chat.get("id")
             _set_current_chat_id(chat.get("id"))
         else:
             chat = _create_new_chat(email)
