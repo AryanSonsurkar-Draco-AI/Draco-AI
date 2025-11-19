@@ -12,6 +12,13 @@ class ChatContext:
         self.last_subject: str = ""
         self.recent_intents: List[str] = []
         self.ts = time.time()
+        self.personality_key: Optional[str] = None
+        self.typing_style: str = "normal"
+        self.last_personality_shift: float = 0.0
+        self.quest: Optional[Dict[str, Any]] = None
+        self.hacking_mode: bool = False
+        self.hacking_stage: int = 0
+        self.last_chaos: float = 0.0
 
     def update_intent(self, intent: str):
         self.recent_intents.append(intent)
@@ -127,6 +134,307 @@ ENERGETIC_HAPPY = [
     "Awesome! Let's ride that momentum, friend.",
     "Heck yes! What shall we build next, friend?",
 ]
+
+PERSONALITIES = {
+    "chill": {
+        "label": "Chill Draco",
+        "style": "normal",
+        "emoji": "😎",
+        "intros": ["*Draco leans back, chilled out.*", "*Vibes mode activated.*"],
+    },
+    "dramatic": {
+        "label": "Over-the-top Draco",
+        "style": "caps",
+        "emoji": "🎭",
+        "intros": ["*Thunder cracks. Draco goes full drama.*", "*Curtains rise. Monologue mode.*"],
+    },
+    "sarcastic": {
+        "label": "Sarcasm Core Draco",
+        "style": "emoji",
+        "emoji": "🙃",
+        "intros": ["*Draco smirks — sarcasm engaged.*", "*Cue sarcastic eyebrow raise.*"],
+    },
+    "motivational": {
+        "label": "Coach Draco",
+        "style": "normal",
+        "emoji": "💪",
+        "intros": ["*Whistle blows. Coach Draco enters.*", "*Motivation cannon warming up.*"],
+    },
+    "glitch": {
+        "label": "Glitchy Draco",
+        "style": "slow",
+        "emoji": "⚡",
+        "intros": ["*Static crackles. Draco glitches playfully.*", "*Systems flicker… glitch voice online.*"],
+    },
+}
+
+PERSONALITY_KEYS = list(PERSONALITIES.keys())
+
+THROWABLES = [
+    ("a blazing fireball", "You dodge like a ninja 🥷", 6, "Molten Ember"),
+    ("a quantum coffee cup", "You sip it mid-air like a boss ☕", 4, "Hyper Brew Beans"),
+    ("a mini black hole", "Gravity warps but you hold steady 🌀", 8, "Pocket Singularity"),
+    ("a confetti meteor", "You laugh as colors explode 🎉", 5, "Prismatic Confetti"),
+]
+
+HACKING_SEQUENCE = [
+    {"stage": 0, "prompt": "Booting fake mainframe... type 'override' to breach."},
+    {"stage": 1, "prompt": "Firewall spoofed. Enter 'inject key' to continue."},
+    {"stage": 2, "prompt": "Almost there! Whisper 'unlock vault' to claim reward."},
+]
+
+HUMOR_STYLES = {
+    "puns": [
+        "I would tell you a UDP joke, but you might not get it.",
+        "I tried to catch fog yesterday. Mist!",
+    ],
+    "memes": [
+        "This chat is officially certified based. 🔥",
+        "*slides you a meme folder* It's all Zoom screenshots!",
+    ],
+    "roasts": [
+        "Your procrastination speedrun is world-record tier.",
+        "CPU usage is high, maybe stop overthinking that todo?",
+    ],
+    "anime": [
+        "Believe it! Your focus power level is over 9000.",
+        "I summon the spirit of productivity no jutsu!",
+    ],
+}
+
+HUMOR_KEYWORDS = {
+    "puns": "puns",
+    "pun": "puns",
+    "meme": "memes",
+    "roast": "roasts",
+    "savage": "roasts",
+    "anime": "anime",
+}
+
+CHAOS_FRAMES = [
+    "\x1b[32m░▒▓▒░▒▓▒░▒▓ MATRIX RAIN ACTIVE ░▒▓▒░▒▓▒░\x1b[0m",
+    "\x1b[36m/\\\\\\\\\\\ spinning glyphs /\\\\\\\\\\\ \x1b[0m",
+    "\x1b[35m>>> random sparks >>> 010101010 <<<\x1b[0m",
+]
+
+QUEST_DEFS = {
+    "code_hunt": [
+        {"prompt": "Quest stage 1: What is the binary of 5?", "keyword": "101"},
+        {"prompt": "Stage 2: Type the magic word 'focus' backwards.", "keyword": "sucof"},
+        {"prompt": "Final stage: say 'quest clear' to grab rewards!", "keyword": "quest clear"},
+    ],
+    "riddle_room": [
+        {"prompt": "Riddle: I have keys but no locks. Answer?", "keyword": "keyboard"},
+        {"prompt": "Nice! Type 'next challenge' to proceed.", "keyword": "next challenge"},
+        {"prompt": "Yell 'victory' to claim loot!", "keyword": "victory"},
+    ],
+}
+
+LOOT_TABLE = ["Nebula Sticker", "Focus Crystal", "Retro Floppy", "Solar Badge"]
+
+TIME_THEMES = {
+    "morning": "Good morning sunshine! Fresh photons for your brain.",
+    "afternoon": "Midday grind time. Hydrate + dominate.",
+    "evening": "Golden hour focus. Let's wrap things up smart.",
+    "night": "Late night ops engaged. Cozy vibes, sharp mind.",
+}
+
+
+def _apply_typing_style(style: str, text: str) -> str:
+    if style == "caps":
+        return text.upper()
+    if style == "emoji":
+        spam = " ".join(random.choices(["🔥", "😂", "✨", "😜"], k=4))
+        return f"{text} {spam}"
+    if style == "slow":
+        letters = []
+        for ch in text:
+            letters.append(ch)
+            if ch != " ":
+                letters.append(" ")
+        return "".join(letters).strip()
+    return text
+
+
+def _maybe_shift_personality(ctx: ChatContext) -> str:
+    now = time.time()
+    if not ctx.personality_key:
+        ctx.personality_key = random.choice(PERSONALITY_KEYS)
+        ctx.typing_style = PERSONALITIES[ctx.personality_key]["style"]
+        ctx.last_personality_shift = now
+        intro = random.choice(PERSONALITIES[ctx.personality_key]["intros"])
+        return intro
+    if now - ctx.last_personality_shift > 60 or random.random() < 0.2:
+        new_key = random.choice([k for k in PERSONALITY_KEYS if k != ctx.personality_key])
+        ctx.personality_key = new_key
+        ctx.typing_style = PERSONALITIES[new_key]["style"]
+        ctx.last_personality_shift = now
+        intro = random.choice(PERSONALITIES[new_key]["intros"])
+        return intro
+    return ""
+
+
+def _render_personality(ctx: ChatContext, text: str) -> str:
+    persona = PERSONALITIES.get(ctx.personality_key or "chill")
+    styled = _apply_typing_style(ctx.typing_style or persona.get("style", "normal"), text)
+    emoji = persona.get("emoji", "")
+    return f"{emoji} {styled}" if emoji else styled
+
+
+def _ensure_inventory(profile: Dict[str, Any]) -> Tuple[List[str], int]:
+    inventory = profile.get("inventory")
+    if not isinstance(inventory, list):
+        inventory = []
+    coins = int(profile.get("draco_coins") or 0)
+    profile["inventory"] = inventory
+    profile["draco_coins"] = coins
+    return inventory, coins
+
+
+def _award_loot(profile: Dict[str, Any], coins: int = 0, item: Optional[str] = None) -> Tuple[str, bool]:
+    inventory, coins_balance = _ensure_inventory(profile)
+    summary = []
+    changed = False
+    if coins:
+        coins_balance += coins
+        profile["draco_coins"] = coins_balance
+        summary.append(f"+{coins} Draco coins")
+        changed = True
+    if item:
+        inventory.append(item)
+        summary.append(f"Loot: {item}")
+        changed = True
+    if summary:
+        return "Rewards → " + ", ".join(summary), True
+    return "", changed
+
+
+def _inventory_status(profile: Dict[str, Any]) -> str:
+    inventory, coins = _ensure_inventory(profile)
+    if not inventory:
+        inv_text = "Inventory empty"
+    else:
+        inv_text = ", ".join(inventory[-6:])
+    return f"You have {coins} Draco coins. Items: {inv_text}."
+
+
+def _handle_inventory_keywords(text: str, profile: Dict[str, Any]) -> Optional[str]:
+    lower = text.lower()
+    if "inventory" in lower or "backpack" in lower:
+        return _inventory_status(profile)
+    if "coins" in lower or "currency" in lower:
+        inv, coins = _ensure_inventory(profile)
+        return f"Draco coins: {coins}. {('Items: ' + ', '.join(inv)) if inv else 'Earn more by finishing quests!'}"
+    return None
+
+
+def _mini_physics_event(profile: Dict[str, Any]) -> Tuple[str, bool]:
+    obj, reaction, coins, item = random.choice(THROWABLES)
+    reward, changed = _award_loot(profile, coins=coins, item=item)
+    message = f"Draco hurls {obj}! 💥 {reaction}"
+    if reward:
+        message += f"\n{reward}"
+    return message, changed
+
+
+def _maybe_terminal_chaos(text: str, ctx: ChatContext) -> Optional[str]:
+    lower = text.lower()
+    if "chaos" in lower or "matrix" in lower or random.random() < 0.08:
+        if time.time() - ctx.last_chaos > 20:
+            ctx.last_chaos = time.time()
+            return "\n".join(random.sample(CHAOS_FRAMES, k=min(3, len(CHAOS_FRAMES))))
+    return None
+
+
+def _time_theme_text() -> str:
+    hour = datetime.now().hour
+    if 5 <= hour < 12:
+        return TIME_THEMES["morning"]
+    if 12 <= hour < 17:
+        return TIME_THEMES["afternoon"]
+    if 17 <= hour < 22:
+        return TIME_THEMES["evening"]
+    return TIME_THEMES["night"]
+
+
+def _handle_humor_preferences(text: str, profile: Dict[str, Any]) -> Tuple[Optional[str], bool]:
+    lower = text.lower()
+    for key, style in HUMOR_KEYWORDS.items():
+        if f"i like {key}" in lower or f"love {key}" in lower:
+            profile["humor_style"] = style
+            return f"Humor style locked to {style}.", True
+    if any(k in lower for k in ["lol", "lmao", "haha", "rofl"]):
+        coins_msg, changed = _award_loot(profile, coins=1)
+        return coins_msg or "I'll keep those jokes coming.", changed
+    return None, False
+
+
+def _humor_reply(text: str, profile: Dict[str, Any]) -> Optional[str]:
+    lower = text.lower()
+    if "joke" in lower or "make me laugh" in lower or "meme" in lower:
+        style = profile.get("humor_style") or random.choice(list(HUMOR_STYLES.keys()))
+        return random.choice(HUMOR_STYLES[style])
+    return None
+
+
+def _handle_hacking_mode(text: str, profile: Dict[str, Any], ctx: ChatContext) -> Tuple[Optional[str], bool]:
+    lower = text.lower()
+    if "hacking mode" in lower and not ctx.hacking_mode:
+        ctx.hacking_mode = True
+        ctx.hacking_stage = 0
+        return "".join([
+            "ACCESS GRANTED...\n",
+            random.choice(CHAOS_FRAMES),
+            "\n", HACKING_SEQUENCE[0]["prompt"],
+        ]), False
+    if ctx.hacking_mode:
+        stage = ctx.hacking_stage
+        step = HACKING_SEQUENCE[stage]
+        keyword = step["prompt"].split("'")[1]
+        if keyword in lower:
+            ctx.hacking_stage += 1
+            if ctx.hacking_stage >= len(HACKING_SEQUENCE):
+                ctx.hacking_mode = False
+                ctx.hacking_stage = 0
+                reward, changed = _award_loot(profile, coins=10, item=random.choice(LOOT_TABLE))
+                text_out = "Hacking cinematic complete!"
+                if reward:
+                    text_out += f"\n{reward}"
+                return text_out, changed
+            next_prompt = HACKING_SEQUENCE[ctx.hacking_stage]["prompt"]
+            return "STREAMING CODE...\n" + next_prompt, False
+        return "Glyphs stream by... try the next command shown on screen.", False
+    return None, False
+
+
+def _handle_quest(text: str, profile: Dict[str, Any], ctx: ChatContext) -> Tuple[Optional[str], bool]:
+    lower = text.lower()
+    if ctx.quest:
+        quest = ctx.quest
+        steps = QUEST_DEFS.get(quest["name"], [])
+        stage = quest.get("stage", 0)
+        if stage < len(steps) and steps[stage]["keyword"] in lower:
+            quest["stage"] = stage + 1
+            if quest["stage"] >= len(steps):
+                ctx.quest = None
+                reward, changed = _award_loot(profile, coins=12, item=random.choice(LOOT_TABLE))
+                msg = "Quest complete!"
+                if reward:
+                    msg += f" {reward}"
+                return msg, changed
+            return steps[quest["stage"]]["prompt"], False
+        return f"Quest hint → {steps[stage]['prompt']}", False
+    if any(kw in lower for kw in ["mini quest", "quest", "challenge me"]):
+        name = random.choice(list(QUEST_DEFS.keys()))
+        ctx.quest = {"name": name, "stage": 0}
+        return f"Quest '{name.replace('_', ' ').title()}' activated! {QUEST_DEFS[name][0]['prompt']}", False
+    return None, False
+
+
+def _maybe_physics_text(text: str) -> bool:
+    lower = text.lower()
+    return "throw" in lower or "fireball" in lower or random.random() < 0.18
+
 
 def small_talk(text: str, profile: Dict[str, Any]) -> str:
     if PATTERNS["greet"].search(text):
