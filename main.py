@@ -1239,7 +1239,47 @@ def process_command(raw_cmd: str):
     if small is not None:
         return small
 
-    # ... rest of the code remains the same ...
+    # Pomodoro controls
+    def _start_timer(seconds: int, mode: str, label: str):
+        pomodoro_mgr.start(seconds, mode)
+        minutes = max(1, seconds // 60)
+        msg = f"Starting {label} for {minutes} minutes."
+        speak(msg)
+        return msg
+
+    if any(phrase in cmd for phrase in ("start pomodoro", "pomodoro start", "begin pomodoro", "start focus", "focus session", "focus mode")):
+        return _start_timer(25 * 60, "pomodoro", "a Pomodoro")
+
+    if any(phrase in cmd for phrase in ("start break", "short break", "break timer", "start rest")):
+        return _start_timer(5 * 60, "break", "a short break")
+
+    if any(phrase in cmd for phrase in ("start mini", "mini pomodoro", "quick pomodoro")):
+        return _start_timer(10 * 60, "mini", "a mini Pomodoro")
+
+    if "pause pomodoro" in cmd or "pause timer" in cmd:
+        pomodoro_mgr.pause()
+        msg = "Paused the Pomodoro timer."
+        speak(msg)
+        return msg
+
+    if "resume pomodoro" in cmd or "resume timer" in cmd or "continue timer" in cmd:
+        pomodoro_mgr.resume()
+        msg = "Resumed the Pomodoro timer."
+        speak(msg)
+        return msg
+
+    if "stop pomodoro" in cmd or "cancel pomodoro" in cmd or "stop timer" in cmd:
+        pomodoro_mgr.stop()
+        msg = "Stopped the Pomodoro timer."
+        speak(msg)
+        return msg
+
+    if "reset pomodoro" in cmd or "restart pomodoro" in cmd:
+        pomodoro_mgr.reset()
+        msg = "Pomodoro timer reset to its last duration."
+        speak(msg)
+        return msg
+
     # Math and time/date
     if "calculate" in cmd or "solve" in cmd:
         speak("I solved it.")
