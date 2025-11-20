@@ -19,6 +19,7 @@ class ChatContext:
         self.hacking_mode: bool = False
         self.hacking_stage: int = 0
         self.last_chaos: float = 0.0
+        self.last_time_theme: float = 0.0
 
     def update_intent(self, intent: str):
         self.recent_intents.append(intent)
@@ -239,6 +240,13 @@ TIME_THEMES = {
     "night": "Late night ops engaged. Cozy vibes, sharp mind.",
 }
 
+SEASON_WEATHER = {
+    "spring": ["Cherry blossom breeze active.", "Digital rain smells like fresh code."],
+    "summer": ["Heatwave buff: +5 energy.", "Solar flare glitter everywhere."],
+    "autumn": ["Leaves crunch in the terminal.", "Pumpkin spice packets unlocked."],
+    "winter": ["Frosty pixels dance around.", "Snowflakes drift across the UI."],
+}
+
 
 def _apply_typing_style(style: str, text: str) -> str:
     if style == "caps":
@@ -275,10 +283,17 @@ def _maybe_shift_personality(ctx: ChatContext) -> str:
 
 
 def _render_personality(ctx: ChatContext, text: str) -> str:
-    persona = PERSONALITIES.get(ctx.personality_key or "chill")
-    styled = _apply_typing_style(ctx.typing_style or persona.get("style", "normal"), text)
+    persona = PERSONALITIES.get(ctx.personality_key or "chill", PERSONALITIES["chill"])
+    style = ctx.typing_style or persona.get("style", "normal")
+    styled_lines = []
+    for line in text.splitlines():
+        if "\x1b[" in line:
+            styled_lines.append(line)
+        else:
+            styled_lines.append(_apply_typing_style(style, line))
+    styled = "\n".join(styled_lines)
     emoji = persona.get("emoji", "")
-    return f"{emoji} {styled}" if emoji else styled
+    return f"{emoji} {styled}" if emoji and styled else styled
 
 
 def _ensure_inventory(profile: Dict[str, Any]) -> Tuple[List[str], int]:
@@ -349,12 +364,24 @@ def _maybe_terminal_chaos(text: str, ctx: ChatContext) -> Optional[str]:
 def _time_theme_text() -> str:
     hour = datetime.now().hour
     if 5 <= hour < 12:
-        return TIME_THEMES["morning"]
-    if 12 <= hour < 17:
-        return TIME_THEMES["afternoon"]
-    if 17 <= hour < 22:
-        return TIME_THEMES["evening"]
-    return TIME_THEMES["night"]
+        base = TIME_THEMES["morning"]
+    elif 12 <= hour < 17:
+        base = TIME_THEMES["afternoon"]
+    elif 17 <= hour < 22:
+        base = TIME_THEMES["evening"]
+    else:
+        base = TIME_THEMES["night"]
+    month = datetime.now().month
+    if month in (3, 4, 5):
+        season = "spring"
+    elif month in (6, 7, 8):
+        season = "summer"
+    elif month in (9, 10, 11):
+        season = "autumn"
+    else:
+        season = "winter"
+    weather = random.choice(SEASON_WEATHER[season])
+    return f"{base} {weather}"
 
 
 def _handle_humor_preferences(text: str, profile: Dict[str, Any]) -> Tuple[Optional[str], bool]:
@@ -525,18 +552,84 @@ def chat_reply(text: str, profile: Dict[str, Any], ctx: ChatContext) -> Dict[str
     """
     # First, capture user info if present
     profile, ack = extract_and_store_user_info(text, profile)
+    profile_changed = False
+
+    def mark_changed(flag: bool = True):
+        nonlocal profile_changed
+        if flag:
+            profile_changed = True
+
+    extras: List[str] = []
+    now = time.time()
+    time_line = ""
+    if now - ctx.last_time_theme > 300:
+        time_line = _time_theme_text()
+        ctx.last_time_theme = now
+
+    chaos_chunk = _maybe_terminal_chaos(text, ctx)
+    if chaos_chunk:
+        extras.append(chaos_chunk)
+
+    physics_chunk: Optional[str] = None
+    if _maybe_physics_text(text):
+        physics_chunk, changed = _mini_physics_event(profile)
+        if physics_chunk:
+            extras.append(physics_chunk)
+        mark_changed(changed)
+
+    def finalize(base_text: str) -> Dict[str, Any]:
+        parts: List[str] = []
+        intro = _maybe_shift_personality(ctx)
+        if intro:
+            parts.append(intro)
+        if time_line:
+            parts.append(time_line)
+        parts.extend(extras)
+        if base_text:
+            parts.append(base_text)
+        combined = "\n".join([p for p in parts if p]).strip()
+        styled = _render_personality(ctx, combined)
+        response = {"text": styled or base_text}
+        if profile_changed:
+            response["updated_profile"] = profile
+        return response
+
     if ack:
-        return {"text": ack, "updated_profile": profile}
+        mark_changed()
+        return finalize(ack)
+
+    inv_text = _handle_inventory_keywords(text, profile)
+    if inv_text:
+        return finalize(inv_text)
+
+    humor_pref, changed = _handle_humor_preferences(text, profile)
+    if humor_pref:
+        mark_changed(changed)
+        return finalize(humor_pref)
+
+    hack_text, changed = _handle_hacking_mode(text, profile, ctx)
+    if hack_text:
+        mark_changed(changed)
+        return finalize(hack_text)
+
+    quest_text, changed = _handle_quest(text, profile, ctx)
+    if quest_text:
+        mark_changed(changed)
+        return finalize(quest_text)
 
     # Small talk / basic Q&A
     s = small_talk(text, profile)
     if s:
-        return {"text": s}
+        return finalize(s)
 
     # Personalized follow-ups
     pf = personalize_followups(text, profile)
     if pf:
-        return {"text": pf}
+        return finalize(pf)
+
+    joke = _humor_reply(text, profile)
+    if joke:
+        return finalize(joke)
 
     # Coding follow-up: favorite subject is coding and user answered our prompt
     fav = (profile.get("favorite_subject") or "").lower()
@@ -547,16 +640,12 @@ def chat_reply(text: str, profile: Dict[str, Any], ctx: ChatContext) -> Dict[str
         if not pending and ("practice question" in lower or "practice questions" in lower or "quick tip" in lower):
             if "practice" in lower:
                 profile["coding_followup"] = "questions"
-                return {
-                    "text": "Nice, let's practice coding! Which language? Python, C++, Java, JavaScript, or HTML/CSS?",
-                    "updated_profile": profile,
-                }
+                mark_changed()
+                return finalize("Nice, let's practice coding! Which language? Python, C++, Java, JavaScript, or HTML/CSS?")
             else:
                 profile["coding_followup"] = "quick_tip"
-                return {
-                    "text": "Sure! For which language do you want a quick coding tip? Python, C++, Java, JavaScript, or HTML/CSS?",
-                    "updated_profile": profile,
-                }
+                mark_changed()
+                return finalize("Sure! For which language do you want a quick coding tip? Python, C++, Java, JavaScript, or HTML/CSS?")
 
         # Second step: user answers with a language name
         if pending in ("questions", "quick_tip"):
@@ -564,6 +653,7 @@ def chat_reply(text: str, profile: Dict[str, Any], ctx: ChatContext) -> Dict[str
             if lang:
                 # clear state
                 profile["coding_followup"] = ""
+                mark_changed()
                 if pending == "questions":
                     if lang == "Python":
                         qs = [
@@ -602,7 +692,7 @@ def chat_reply(text: str, profile: Dict[str, Any], ctx: ChatContext) -> Dict[str
                             "Explain the difference between inline, inline-block, and block elements.",
                         ]
                     reply_text = "Here are some {} practice questions:\n- ".format(lang) + "\n- ".join(qs)
-                    return {"text": reply_text, "updated_profile": profile}
+                    return finalize(reply_text)
                 else:
                     if lang == "Python":
                         tip = "Use list comprehensions and 'enumerate' to write clean loops, and always prefer 'with open(...)' for file handling."
@@ -619,7 +709,7 @@ def chat_reply(text: str, profile: Dict[str, Any], ctx: ChatContext) -> Dict[str
                     else:
                         tip = "Keep your code small, readable, and well-commented, whatever the language."
                     reply_text = f"Quick {lang} tip: {tip}"
-                    return {"text": reply_text, "updated_profile": profile}
+                    return finalize(reply_text)
 
     # Homework assist
     title, bullets = homework_assist(text)
@@ -637,11 +727,15 @@ def chat_reply(text: str, profile: Dict[str, Any], ctx: ChatContext) -> Dict[str
         text_block = f"{title}:\n - " + "\n - ".join(bullets)
         if notes:
             text_block += "\n\n" + notes
-        return {"text": text_block, "title": title, "bullets": bullets}
+        resp = finalize(text_block)
+        resp["title"] = title
+        resp["bullets"] = bullets
+        return resp
 
     # Contextual nudge if missing info
     if "favorite subject" in text.lower() and not profile.get("favorite_subject"):
-        return {"text": "I don't know your favorite subject yet, can you tell me?"}
+        return finalize("I don't know your favorite subject yet, can you tell me?")
 
     # Fallback
-    return {"text": "I'm not sure about that. Can you ask differently?"}
+    fallback = "I'm not sure about that. Can you ask differently?"
+    return finalize(fallback)

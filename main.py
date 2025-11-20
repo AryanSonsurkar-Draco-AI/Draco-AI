@@ -95,6 +95,11 @@ try:
 except Exception:
     draco_chat = None
 
+try:
+    from boss_level import BossLevelEngine
+except Exception:
+    BossLevelEngine = None
+
 ON_RENDER = os.environ.get("RENDER") is not None
 ON_SERVER = ON_RENDER or (os.environ.get("PORT") is not None) or (os.environ.get("RENDER_EXTERNAL_URL") is not None)
 
@@ -335,6 +340,7 @@ class Personality:
 memory = MemoryManager()
 personality = Personality()
 chat_ctx = draco_chat.ChatContext() if draco_chat else None
+boss_level_engine = BossLevelEngine() if BossLevelEngine else None
 
 # ------------- Gamification (XP / Levels / Modes) -------------
 
@@ -1061,68 +1067,6 @@ def handle_small_talk(cmd: str) -> Optional[str]:
         "morning hype": "Rise and shine! Time to collect XP and defeat today's bosses.",
         "evening reflection": "Review your XP gained today. Plan tomorrow's grind.",
         "i am lazy": "Small effort beats zero effort. Just start, momentum follows.",
-        "next goal": "Focus on what moves the needle most. Complete it, then move on.",
-        "energy low": "Fuel up and hydrate. Even heroes need stamina to win battles.",
-        "what can i do": "Pick one task and finish it. Momentum builds from small wins.",
-        "how to stay fit": "Move daily, hydrate, and push just a little past comfort.",
-        "coding problem": "Break it into smaller functions. Test each part like a mini-boss.",
-        "i am nervous for exams": "Revise smartly. Short, repeated sessions beat last-minute cramming.",
-        "motivate me to study": "Every chapter completed is XP gained. You're leveling up!",
-        "give me a quick joke": "Why don't programmers like nature? Too many bugs.",
-        "tell me a funny anime joke": "Why did Luffy bring a ladder? He wanted to reach new heights!",
-        "morning energy": "Coffee, water, and a plan. Time to collect XP!",
-        "how to focus": "Silence distractions, set a timer, and start small.",
-        "coding motivation quote": "Debug like a hero, test like a king, code like a legend.",
-        "i feel tired": "Take a 15-minute break. Recharge, then come back stronger.",
-        "anime advice for life": "Face challenges like Naruto, never give up, and trust your team.",
-        "funny quote": "I would exercise, but my Wi-Fi told me not to.",
-        "i am worried about tomorrow": "Focus on what you can do today. Tomorrow takes care of itself.",
-        "how to stay motivated": "Small wins daily, review progress, reward yourself a little.",
-        "i need energy": "Hydrate, move a bit, and plan one exciting task to boost XP.",
-        "give me life advice": "Focus on what you can control, improve daily, and keep leveling up.",
-        "how to improve coding": "Solve problems daily, read code, debug like a champion.",
-        "anime recommendation": "Watch a shonen series to feel unstoppable and motivated.",
-        "what should i do today": "Pick one high-value task and complete it first. XP unlocked.",
-        "i am frustrated with coding": "Every bug fixed is a level gained. Keep at it!",
-        "i need a break": "Take a short break, recharge, then get back to XP farming.",
-        "what's your name": "I am Draco AI, created to help you level up in life.",
-        "who created you": "My sensai Aryan Sonsurkar, along with Kaustubh and Ritesh, built me.",
-        "why should i use you": "Because I back you up like a reliable anime partner.",
-        "tell me a story": "Once, a young coder faced endless bugs, but persistence leveled them to master status.",
-        "i need guidance": "Start with one clear goal, then tackle small steps consistently.",
-        "how to be productive": "Block distractions, prioritize tasks, and reward yourself after each win.",
-        "i am bored at home": "Let's turn downtime into XP: learn something small, draw, or code.",
-        "morning motivation quote": "Rise, grind, repeat. XP waits for no one!",
-        "evening motivation quote": "Reflect, rest, and plan your next epic session tomorrow.",
-        "coding help for beginners": "Start with small programs, debug carefully, and learn by doing.",
-        "study help": "Break chapters into blocks, test yourself, and track progress.",
-        "how to stay calm": "Breathe, focus on what you can control, and take one step at a time.",
-        "funny anime moment": "Why did Goku refuse to take a nap? He didn't want to lose XP!",
-        "give me a joke to tell friends": "Why did the computer go to therapy? Too many bytes of stress.",
-        "how to beat procrastination": "Start with the smallest task. Momentum grows from action.",
-        "study plan": "Divide tasks into daily XP blocks and track completion.",
-        "i am nervous about interview": "Prepare key points, breathe, and imagine nailing it like a hero.",
-        "how to learn fast": "Focus, repeat, test yourself, and review mistakes for XP gain.",
-        "coding motivation for today": "Even small code today adds XP for your future mastery.",
-        "anime motivation": "Fight like Naruto, plan like Shikamaru, never give up.",
-        "how to feel confident": "Preparation builds confidence. Show up knowing you've practiced.",
-        "i am stressed about exams": "Focus on one topic at a time. Stepwise XP wins work best.",
-        "daily encouragement": "Keep moving forward. Small progress today is big tomorrow.",
-        "how to remember things": "Use repetition, test yourself, and relate new info to what you know.",
-        "funny programming joke": "Why do programmers prefer dark mode? Light attracts bugs.",
-        "anime joke for friends": "Why did Luffy refuse to fight? He was busy eating meat!",
-        "what can i learn today": "Pick a topic you've been avoiding and conquer one small piece.",
-        "how to stay motivated during exams": "Short sprints, mini rewards, and tracking XP progress helps a lot.",
-        "morning hype up": "Good morning! XP and new opportunities await today.",
-        "evening reflection advice": "Review your XP gained, plan tomorrow, rest, and recharge.",
-        "how to stay disciplined": "Consistency over intensity. Show up every day, even small steps.",
-        "funny tts joke": "Why did the AI refuse to sleep? It had too many processes running.",
-        "study motivation quote": "Discipline beats motivation. Show up every day to collect XP.",
-        "coding quote": "Every error is a checkpoint, every fix is XP gained.",
-        "anime quote motivation": "Believe in your strength, train hard, and never give up.",
-        "morning energy boost": "Water, stretch, and tackle one XP task first thing.",
-        "evening energy boost": "Reflect, rest, plan your XP goals for tomorrow.",
-        "i feel lazy": "Start with just one small action. Momentum builds quickly.",
         "i need help coding": "Break your problem into functions and tackle them one by one.",
         "funny shonen moment": "Why did Naruto bring a ladder? To reach his next level!",
         "give me life tip": "Focus on what you can control, improve daily, and trust your process.",
@@ -1272,368 +1216,42 @@ def process_command(raw_cmd: str):
         except Exception:
             pass
 
+    profile = get_user_profile(user_email) if user_email else memory.long
+
+    def _handle_boss_level(command_text: Optional[str] = None):
+        if not boss_level_engine:
+            return None
+        try:
+            result = boss_level_engine.handle(command_text or raw_cmd, profile)
+        except Exception:
+            return None
+        if not isinstance(result, dict):
+            return None
+        updated = result.get("updated_profile")
+        if updated is not None:
+            if user_email:
+                set_user_profile(user_email, updated)
+            else:
+                for k, v in updated.items():
+                    memory.set_pref(k, v)
+        text = str(result.get("text", "")).strip()
+        if text:
+            speak(text)
+            return text
+        return None
+
+    boss_test_triggers = {"/chaos", "/battle", "/glitch", "/time", "/npc", "/mood"}
+    if cmd in boss_test_triggers:
+        boss_text = _handle_boss_level(raw_cmd)
+        if boss_text:
+            return boss_text
+
     personality.update(cmd)
 
     # Small-talk first
     small = handle_small_talk(cmd)
     if small is not None:
         return small
-
-    # ------------- Study / Pomodoro / Focus flows -------------
-
-    # high-level study starters
-    if "let's start studying" in cmd or "lets start studying" in cmd:
-        reply = "Shall I start a Pomodoro timer?"
-        speak(reply)
-        return reply
-
-    if "let's study python" in cmd or "lets study python" in cmd:
-        memory.long["study_topic"] = "python"
-        memory._save()
-        reply = "Python is a high-level programming language used for web, data, AI, and more. Want a quick tip or a practice question?"
-        speak(reply)
-        return reply
-
-    if "let's study maths" in cmd or "lets study maths" in cmd or "let's study math" in cmd:
-        memory.long["study_topic"] = "maths"
-        memory._save()
-        reply = "Maths is the study of numbers, shapes, and patterns. Want a quick tip or practice question?"
-        speak(reply)
-        return reply
-
-    # topic-aware quick tip / practice question
-    if cmd.strip() in ("quick tip", "practice question"):
-        topic = memory.long.get("study_topic") or "general"
-        if topic == "python":
-            if "practice" in cmd:
-                txt = "Practice question (Python): Write a function that returns True if a string is a palindrome."
-            else:
-                txt = "Quick tip (Python): Use list comprehensions and enumerate to keep loops clean and readable."
-        elif topic in ("maths", "math"):
-            if "practice" in cmd:
-                txt = "Practice question (Maths): Solve for x: 2x + 5 = 17."
-            else:
-                txt = "Quick tip (Maths): Always write down what is given, what is required, and draw a small diagram if possible."
-        else:
-            if "practice" in cmd:
-                txt = "Practice question: Summarize what you learned today in 3 bullet points."
-            else:
-                txt = "Quick tip: Break big tasks into small steps and timebox them with short focus sprints."
-        speak(txt)
-        add_xp("study", 8)
-        return txt
-
-    if "take a break" in cmd:
-        txt = "5-min break started! Stretch, grab water, or do nothing 😎"
-        speak(txt)
-        # start a 5 minute break timer using pomodoro engine in break mode
-        pomodoro_mgr.start(5 * 60, "break")
-        return txt
-
-    # dedicated Pomodoro commands
-    if cmd == "start pomodoro":
-        txt = "Shall I start your coffee Pomodoro timer? ☕"
-        speak(txt)
-        return txt
-
-    if cmd == "mini pomodoro":
-        pomodoro_mgr.start(10 * 60, "mini")
-        txt = "Starting a 10-min focus sprint! ⏳"
-        speak(txt)
-        add_xp("study", 6)
-        return txt
-
-    if cmd == "focus sprint":
-        pomodoro_mgr.start(3 * 60, "focus")
-        txt = "3-minute focus sprint starting… stay sharp!"
-        speak(txt)
-        add_xp("study", 4)
-        return txt
-
-    if cmd == "pomodoro done":
-        txt = "Congrats! Take a short break 😎"
-        speak(txt)
-        add_xp("study", 10)
-        return txt
-
-    if cmd == "stop timer" or cmd == "stop everything":
-        pomodoro_mgr.stop()
-        txt = "All timers and challenges paused. Rest mode ON 😌"
-        speak(txt)
-        return txt
-
-    if cmd == "reset timer" or cmd == "reset everything":
-        pomodoro_mgr.reset()
-        txt = "All challenges and Pomodoro timers are reset. Fresh start!"
-        speak(txt)
-        return txt
-
-    if cmd == "pause timer":
-        pomodoro_mgr.pause()
-        txt = "Timer paused. Resume when ready!"
-        speak(txt)
-        return txt
-
-    if cmd == "how much time left":
-        st = pomodoro_mgr.get_status()
-        if not st.get("active"):
-            txt = "No active Pomodoro right now."
-        else:
-            mins = max(0, int(st.get("remaining_seconds", 0) // 60))
-            txt = f"You have {mins} minutes left on your Pomodoro."
-        speak(txt)
-        return txt
-
-    # generic yes/no hooks for Pomodoro prompts
-    if cmd == "yes":
-        # if user recently asked to start Pomodoro, just start a standard 25-minute session
-        pomodoro_mgr.start(25 * 60, "pomodoro")
-        txt = "Pomodoro started! Watch the coffee disappear… digital clock ticking!"
-        speak(txt)
-        add_xp("study", 8)
-        return txt
-
-    if cmd == "no":
-        txt = "Ok, then tell me what we have to study or do next."
-        speak(txt)
-        return txt
-
-    # study session follow-ups
-    if "do you want to start another pomodoro" in cmd:
-        txt = "If you want, just say 'start Pomodoro' and I'll refill the cup."
-        speak(txt)
-        return txt
-
-    if "do you want to study another topic" in cmd:
-        txt = "Tell me the next topic, like 'let's study Python' or 'let's study Maths'."
-        speak(txt)
-        return txt
-
-    # quick mini timer
-    if "set a mini timer" in cmd:
-        memory.long["pending_intent"] = "mini_timer_minutes"
-        memory._save()
-        txt = "How many minutes?"
-        speak(txt)
-        return txt
-
-    if memory.long.get("pending_intent") == "mini_timer_minutes":
-        m = re.search(r"(\d+)", cmd)
-        if m:
-            minutes = int(m.group(1))
-            seconds = max(1, minutes * 60)
-            memory.long["pending_intent"] = None
-            memory._save()
-            pomodoro_mgr.start(seconds, "mini")
-            txt = f"Mini timer started for {minutes} minutes."
-            speak(txt)
-            return txt
-
-    # ------------- Energy & focus boosters -------------
-
-    if "i'm feeling sleepy" in cmd or "i am feeling sleepy" in cmd or "i am sleepy" in cmd:
-        txt = "Time for a 5-min stretch or mini Pomodoro to wake up? 🌞"
-        speak(txt)
-        return txt
-
-    if "i'm losing focus" in cmd or "i am losing focus" in cmd or "i need focus" in cmd:
-        txt = "Let’s do a 3-min focus sprint! Ready?"
-        speak(txt)
-        return txt
-
-    if "feeling unmotivated" in cmd:
-        txt = "Want a micro coding challenge or fun fact to kickstart your brain?"
-        speak(txt)
-        return txt
-
-    if "i'm stressed" in cmd or "i am stressed" in cmd:
-        txt = "Take a 3-min breathing break or a short coding sprint?"
-        speak(txt)
-        return txt
-
-    if "i'm excited" in cmd or "i am excited" in cmd:
-        txt = "Perfect! Want a big challenge or fun mini project?"
-        speak(txt)
-        return txt
-
-    if "i'm bored" in cmd or "i am bored" in cmd or "i am bored with life" in cmd:
-        txt = "How about a small coding challenge or a fun fact?"
-        speak(txt)
-        return txt
-
-    if "feeling lucky" in cmd:
-        txt = "Lucky you! Here’s a random coding challenge 🪄\nWrite a program to reverse a string without using built-in reverse functions."
-        speak(txt)
-        add_xp("coding", 8)
-        return txt
-
-    if "need motivation" in cmd or "i need motivation" in cmd:
-        txt = "Small steps every day lead to huge results 💪"
-        speak(txt)
-        return txt
-
-    # ------------- Gamified / XP flows -------------
-
-    if "challenge me" in cmd:
-        txt = "Level 1 Coding Quest: Solve a small Python puzzle. Easy or medium?"
-        speak(txt)
-        return txt
-
-    if "i want xp" in cmd:
-        txt = "Complete a mini-challenge to earn XP! For example, write a function that sums a list."
-        speak(txt)
-        return txt
-
-    if "boss fight" in cmd:
-        txt = "A tough coding problem awaits! Conquer the level by writing a function that checks if a number is prime."
-        speak(txt)
-        add_xp("coding", 15)
-        return txt
-
-    if "level up" in cmd:
-        g = get_gamestate()
-        txt = f"Congrats! You’re Level {g['level']} now. Ready for the next coding quest?"
-        speak(txt)
-        return txt
-
-    if "daily quest" in cmd:
-        txt = "Here’s today’s micro challenge: write a function in Python that counts vowels in a string."
-        speak(txt)
-        add_xp("coding", 6)
-        return txt
-
-    if "leaderboard" in cmd:
-        g = get_gamestate()
-        txt = f"You’re Level {g['level']} with {g['total_xp']} total XP. Imagine a global leaderboard — where do you think you rank?"
-        speak(txt)
-        return txt
-
-    if "reward me" in cmd:
-        txt = "Complete a task or challenge, then come back and I’ll drop a motivational quote as your virtual reward!"
-        speak(txt)
-        return txt
-
-    if "bonus challenge" in cmd:
-        txt = "A hidden bonus problem appears! Do you accept it? Try writing a function that returns the Fibonacci sequence up to n."
-        speak(txt)
-        add_xp("coding", 10)
-        return txt
-
-    # ------------- Fun / quirky interactions -------------
-
-    if "talk like a pirate" in cmd:
-        txt = "Arrr matey! Let’s code our treasure map in Python! 🏴‍☠️"
-        speak(txt)
-        return txt
-
-    if "sing a coding song" in cmd:
-        txt = "🎵 I’ve got 99 bugs but fixing one… still leaves 98 🎵"
-        speak(txt)
-        return txt
-
-    if "give me a secret" in cmd or "give me a secret tip" in cmd:
-        txt = "The secret to coding… never fear the semicolon 😉"
-        speak(txt)
-        return txt
-
-    if "tell me a joke" in cmd:
-        txt = "Why do programmers hate nature? Too many bugs 😆"
-        speak(txt)
-        return txt
-
-    if "fun fact" in cmd:
-        txt = "Python is named after Monty Python, not the snake! 🐍"
-        speak(txt)
-        return txt
-
-    if "talk like a wizard" in cmd:
-        txt = "By the code of Pythonia, I summon thee a coding quest! 🧙‍♂️"
-        speak(txt)
-        return txt
-
-    if "talk like a robot" in cmd:
-        txt = "01101000 01100101 01101100 01101100 01101111… ready to code?"
-        speak(txt)
-        return txt
-
-    if "coding vibes" in cmd:
-        txt = "Some days are bug-free, some days are spaghetti… today’s which?"
-        speak(txt)
-        return txt
-
-    if "expectations vs reality" in cmd:
-        txt = "Expectation: Code runs first try. Reality: SyntaxError everywhere 😅"
-        speak(txt)
-        return txt
-
-    if "random challenge" in cmd:
-        txt = "Random challenge: write a program to reverse a string without using built-in functions."
-        speak(txt)
-        add_xp("coding", 6)
-        return txt
-
-    # ------------- Quick productivity helpers & misc -------------
-
-    if "take a short break" in cmd:
-        txt = "5-min break started! Stretch, grab water, or relax 😎"
-        speak(txt)
-        pomodoro_mgr.start(5 * 60, "break")
-        return txt
-
-    if "check progress" in cmd:
-        g = get_gamestate()
-        txt = f"Here’s your progress for today: Level {g['level']}, {g['xp']} XP towards the next level, {g['total_xp']} XP total."
-        speak(txt)
-        return txt
-
-    if "motivational quote" in cmd:
-        txt = "“Code is like humor. When you have to explain it, it’s bad.” 😎"
-        speak(txt)
-        return txt
-
-    if "give me a random fact" in cmd:
-        txt = "Did you know the first computer bug was a real moth? 🐛"
-        speak(txt)
-        return txt
-
-    if "show me a mini challenge" in cmd:
-        txt = "Mini challenge: create a function that counts vowels in a string."
-        speak(txt)
-        add_xp("coding", 5)
-        return txt
-
-    if "easter egg" in cmd:
-        txt = "🎉 You found a hidden tip! Solve this bonus puzzle: write a function that returns the factorial of n without using recursion."
-        speak(txt)
-        add_xp("coding", 7)
-        return txt
-
-    if "quick quiz" in cmd:
-        txt = "Quick quiz: What does 'CPU' stand for? (Answer: Central Processing Unit.)"
-        speak(txt)
-        return txt
-
-    if "fun mini-game" in cmd:
-        txt = "Fun mini-game: Guess the output: print(2 + 3 * 4)? (It’s 14, not 20!)"
-        speak(txt)
-        return txt
-
-    if "surprise me" in cmd:
-        txt = "Here’s a random tip: always break problems into smaller steps. It’s a game-changer!"
-        speak(txt)
-        return txt
-
-    if "daily inspiration" in cmd:
-        txt = "“Success is the sum of small efforts repeated day in and day out.” 💪"
-        speak(txt)
-        return txt
-
-    # Gamification XP hooks (keyword-based)
-
-    if any(k in cmd for k in ["notes", "note ", "summarize", "summary", "flashcard", "study", "exam", "research"]):
-        add_xp("study", 5)
-    if any(k in cmd for k in ["code", "bug", "error", "function", "class", "refactor", "debug"]):
-        add_xp("coding", 5)
 
     # ... rest of the code remains the same ...
     # Math and time/date
@@ -2058,8 +1676,6 @@ def process_command(raw_cmd: str):
 
     # Rule-based chat engine fallback
     if draco_chat and isinstance(cmd, str) and cmd:
-        user_email = get_logged_in_email()
-        profile = get_user_profile(user_email) if user_email else memory.long
         try:
             out = draco_chat.chat_reply(raw_cmd, profile, chat_ctx)
             if isinstance(out, dict):
@@ -2075,6 +1691,10 @@ def process_command(raw_cmd: str):
                     return text
         except Exception:
             pass
+
+    boss_fallback = _handle_boss_level()
+    if boss_fallback:
+        return boss_fallback
 
     # Final fallback
     speak("I didn't get that. Try asking me to open apps, play music, take notes, set reminders or search the web.")
