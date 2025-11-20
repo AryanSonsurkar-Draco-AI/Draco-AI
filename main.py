@@ -95,10 +95,7 @@ try:
 except Exception:
     draco_chat = None
 
-try:
-    from boss_level import BossLevelEngine
-except Exception:
-    BossLevelEngine = None
+BossLevelEngine = None  # Boss level module disabled
 
 ON_RENDER = os.environ.get("RENDER") is not None
 ON_SERVER = ON_RENDER or (os.environ.get("PORT") is not None) or (os.environ.get("RENDER_EXTERNAL_URL") is not None)
@@ -340,7 +337,6 @@ class Personality:
 memory = MemoryManager()
 personality = Personality()
 chat_ctx = draco_chat.ChatContext() if draco_chat else None
-boss_level_engine = BossLevelEngine() if BossLevelEngine else None
 
 # ------------- Gamification (XP / Levels / Modes) -------------
 
@@ -1232,34 +1228,6 @@ def process_command(raw_cmd: str):
             pass
 
     profile = get_user_profile(user_email) if user_email else memory.long
-
-    def _handle_boss_level(command_text: Optional[str] = None):
-        if not boss_level_engine:
-            return None
-        try:
-            result = boss_level_engine.handle(command_text or raw_cmd, profile)
-        except Exception:
-            return None
-        if not isinstance(result, dict):
-            return None
-        updated = result.get("updated_profile")
-        if updated is not None:
-            if user_email:
-                set_user_profile(user_email, updated)
-            else:
-                for k, v in updated.items():
-                    memory.set_pref(k, v)
-        text = str(result.get("text", "")).strip()
-        if text:
-            speak(text)
-            return text
-        return None
-
-    boss_test_triggers = {"/chaos", "/battle", "/glitch", "/time", "/npc", "/mood"}
-    if cmd in boss_test_triggers:
-        boss_text = _handle_boss_level(raw_cmd)
-        if boss_text:
-            return boss_text
 
     personality.update(cmd)
 

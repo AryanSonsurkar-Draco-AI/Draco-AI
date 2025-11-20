@@ -495,14 +495,14 @@
         </div>
         <small>Tip: Try "open youtube", "play music", "list notes", "remind me to drink water at 19:30"</small>
         <!-- Pomodoro coffee-cup widget -->
-        <div id="pomodoroWidget" style="margin-top:10px; display:none; align-items:center; gap:10px; font-size:13px;">
-          <div style="width:40px; height:60px; border-radius:8px 8px 4px 4px; border:2px solid rgba(255,255,255,0.4); position:relative; overflow:hidden; background:rgba(15,12,32,0.8);">
-            <div id="coffeeFill" style="position:absolute; left:0; right:0; bottom:0; height:100%; background:linear-gradient(180deg,#c67c4f,#5a331b);"></div>
+        <div id="pomodoroWidget" style="margin-top:14px; padding:10px 12px; border-radius:14px; border:1px solid rgba(255,255,255,0.2); background:rgba(8,6,20,0.6); display:flex; align-items:center; gap:16px; font-size:15px;">
+          <div style="width:70px; height:100px; border-radius:14px 14px 8px 8px; border:3px solid rgba(255,255,255,0.5); position:relative; overflow:hidden; background:rgba(15,12,32,0.85); box-shadow:0 8px 24px rgba(0,0,0,0.35) inset;">
+            <div id="coffeeFill" style="position:absolute; left:0; right:0; bottom:0; height:100%; background:linear-gradient(180deg,#e29d6a,#7a441e);"></div>
           </div>
-          <div style="display:flex; flex-direction:column; gap:2px;">
-            <div style="font-weight:600;">Coffee Pomodoro</div>
-            <div id="pomodoroClock" style="font-family:monospace; letter-spacing:1px;">00:00</div>
-            <div id="pomodoroLabel" style="color:var(--muted);">Idle</div>
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <div style="font-weight:700; font-size:1rem; letter-spacing:0.4px;">Coffee Pomodoro</div>
+            <div id="pomodoroClock" style="font-family:monospace; letter-spacing:2px; font-size:1.4rem;">00:00</div>
+            <div id="pomodoroLabel" style="color:var(--muted); font-size:0.95rem;">Idle</div>
           </div>
         </div>
         <div class="card" style="margin-top:12px;">
@@ -597,22 +597,34 @@
 
     function updatePomodoroUI(payload){
       if (!pomodoroWidget || !coffeeFill || !pomodoroClock || !pomodoroLabel) return;
-      const total = payload && typeof payload.total_seconds === 'number' ? payload.total_seconds : 0;
-      const remaining = payload && typeof payload.remaining_seconds === 'number' ? payload.remaining_seconds : 0;
+      const totalRaw = payload && typeof payload.total_seconds === 'number' ? payload.total_seconds : 0;
+      const remainingRaw = payload && typeof payload.remaining_seconds === 'number' ? payload.remaining_seconds : 0;
+      const total = Math.max(0, totalRaw);
+      const remaining = Math.max(0, remainingRaw);
       const mode = (payload && payload.mode) || 'pomodoro';
-      const progress = payload && typeof payload.progress === 'number' ? payload.progress : (total>0 ? 1 - (remaining/total) : 0);
-      pomodoroWidget.style.display = total > 0 ? 'flex' : 'none';
-      pomodoroClock.textContent = formatSeconds(remaining || total);
-      const percent = Math.max(0, Math.min(100, (1 - progress) * 100));
-      coffeeFill.style.height = percent + '%';
-      if (mode === 'break') pomodoroLabel.textContent = 'Break time';
-      else if (mode === 'mini') pomodoroLabel.textContent = 'Mini Pomodoro';
-      else if (mode === 'focus') pomodoroLabel.textContent = 'Focus sprint';
-      else pomodoroLabel.textContent = 'Pomodoro';
+      const progress = payload && typeof payload.progress === 'number'
+        ? Math.max(0, Math.min(1, payload.progress))
+        : (total > 0 ? 1 - (remaining / total) : 0);
+
+      pomodoroWidget.style.display = 'flex';
+      if (total > 0) {
+        pomodoroClock.textContent = formatSeconds(remaining || total);
+        const percent = Math.max(0, Math.min(100, (1 - progress) * 100));
+        coffeeFill.style.height = percent + '%';
+      } else {
+        pomodoroClock.textContent = '00:00';
+        coffeeFill.style.height = '0%';
+      }
+
+      if (mode === 'break') pomodoroLabel.textContent = total > 0 ? 'Break time' : 'Break queued';
+      else if (mode === 'mini') pomodoroLabel.textContent = total > 0 ? 'Mini Pomodoro' : 'Mini idle';
+      else if (mode === 'focus') pomodoroLabel.textContent = total > 0 ? 'Focus sprint' : 'Focus idle';
+      else pomodoroLabel.textContent = total > 0 ? 'Pomodoro' : 'Idle';
     }
 
     function hidePomodoroUI(){
-      if (pomodoroWidget) pomodoroWidget.style.display = 'none';
+      // Keep widget visible but show idle state
+      updatePomodoroUI({ mode: 'pomodoro', total_seconds: 0, remaining_seconds: 0, progress: 0 });
     }
 
     let socket = null;
