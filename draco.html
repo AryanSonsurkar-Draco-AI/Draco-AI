@@ -919,6 +919,12 @@
       osc.stop(now + duration + 0.02);
     }
 
+    function applyPomodoroPayload(payload){
+      if (payload && typeof payload === 'object') {
+        updatePomodoroUI(payload);
+      }
+    }
+
     async function sendCommand(text) {
       if (!text) return;
       appendItem(text, 'user');
@@ -952,6 +958,9 @@
           appendItem(t, 'bot');
           speakText(t);
           maybeAddFollowup(t);
+        }
+        if (data && data.pomodoro) {
+          applyPomodoroPayload(data.pomodoro);
         }
         refreshGamestate();
         if (data && Array.isArray(data.sources_labeled) && data.sources_labeled.length) {
@@ -1097,6 +1106,9 @@
           appendItem(text, 'bot');
           speakText(text);
           maybeAddFollowup(text);
+        }
+        if (data && data.pomodoro) {
+          applyPomodoroPayload(data.pomodoro);
         }
         if (data && Array.isArray(data.sources_labeled) && data.sources_labeled.length) {
           const list = data.sources_labeled.map(s => `<a href="${s.url}" target="_blank" rel="noopener noreferrer">${s.label}</a>`).join(' | ');

@@ -555,10 +555,14 @@ class PomodoroManager:
             self.state.remaining_seconds = self.state.total_seconds
             self.state.paused = False
             self.state.started_at = time.time()
-        emit_to_ui("pomodoro_started", {
+        payload = {
             "mode": mode,
             "total_seconds": self.state.total_seconds,
-        })
+            "remaining_seconds": self.state.remaining_seconds,
+            "progress": 0.0,
+        }
+        emit_to_ui("pomodoro_started", payload)
+        emit_to_ui("pomodoro_tick", payload)
         emit_to_ui("play_beep", {"kind": "pomodoro_start"})
 
     def stop(self):
@@ -591,10 +595,14 @@ class PomodoroManager:
             self.state.remaining_seconds = total
             self.state.paused = False
             self.state.started_at = time.time()
-        emit_to_ui("pomodoro_reset", {
+        payload = {
             "mode": mode,
             "total_seconds": total,
-        })
+            "remaining_seconds": total,
+            "progress": 0.0,
+        }
+        emit_to_ui("pomodoro_reset", payload)
+        emit_to_ui("pomodoro_tick", payload)
 
     def get_status(self):
         with self._lock:
@@ -1240,12 +1248,32 @@ def process_command(raw_cmd: str):
         return small
 
     # Pomodoro controls
+    def _pomodoro_payload():
+        status = pomodoro_mgr.get_status()
+        total = max(0, int(status.get("total_seconds") or 0))
+        remaining = max(0, int(status.get("remaining_seconds") or 0))
+        active = bool(status.get("active"))
+        mode = status.get("mode") or "pomodoro"
+        paused = bool(status.get("paused"))
+        progress = 0.0
+        if total > 0:
+            denom = float(total) if total else 1.0
+            progress = max(0.0, min(1.0, 1.0 - (remaining / denom))) if active else 0.0
+        return {
+            "mode": mode,
+            "total_seconds": total,
+            "remaining_seconds": remaining,
+            "progress": progress,
+            "active": active,
+            "paused": paused,
+        }
+
     def _start_timer(seconds: int, mode: str, label: str):
         pomodoro_mgr.start(seconds, mode)
         minutes = max(1, seconds // 60)
         msg = f"Starting {label} for {minutes} minutes."
         speak(msg)
-        return msg
+        return {"text": msg, "pomodoro": _pomodoro_payload()}
 
     if any(phrase in cmd for phrase in ("start pomodoro", "pomodoro start", "begin pomodoro", "start focus", "focus session", "focus mode")):
         return _start_timer(25 * 60, "pomodoro", "a Pomodoro")
@@ -1260,25 +1288,25 @@ def process_command(raw_cmd: str):
         pomodoro_mgr.pause()
         msg = "Paused the Pomodoro timer."
         speak(msg)
-        return msg
+        return {"text": msg, "pomodoro": _pomodoro_payload()}
 
     if "resume pomodoro" in cmd or "resume timer" in cmd or "continue timer" in cmd:
         pomodoro_mgr.resume()
         msg = "Resumed the Pomodoro timer."
         speak(msg)
-        return msg
+        return {"text": msg, "pomodoro": _pomodoro_payload()}
 
     if "stop pomodoro" in cmd or "cancel pomodoro" in cmd or "stop timer" in cmd:
         pomodoro_mgr.stop()
         msg = "Stopped the Pomodoro timer."
         speak(msg)
-        return msg
+        return {"text": msg, "pomodoro": _pomodoro_payload()}
 
     if "reset pomodoro" in cmd or "restart pomodoro" in cmd:
         pomodoro_mgr.reset()
         msg = "Pomodoro timer reset to its last duration."
         speak(msg)
-        return msg
+        return {"text": msg, "pomodoro": _pomodoro_payload()}
 
     # Math and time/date
     if "calculate" in cmd or "solve" in cmd:
