@@ -95,6 +95,9 @@ try:
 except Exception:
     draco_chat = None
 
+# Disable legacy draco_chat fallback responses (keep routing in main.py only)
+draco_chat = None
+
 BossLevelEngine = None  # Boss level module disabled
 
 ON_RENDER = os.environ.get("RENDER") is not None
@@ -336,7 +339,7 @@ class Personality:
 
 memory = MemoryManager()
 personality = Personality()
-chat_ctx = draco_chat.ChatContext() if draco_chat else None
+chat_ctx = None
 
 # ------------- Gamification (XP / Levels / Modes) -------------
 
@@ -1656,28 +1659,6 @@ def process_command(raw_cmd: str):
             speak("Command executed, returning output.")
             return out[:1500]
         return f"Command error: {err}"
-
-    # Rule-based chat engine fallback
-    if draco_chat and isinstance(cmd, str) and cmd:
-        try:
-            out = draco_chat.chat_reply(raw_cmd, profile, chat_ctx)
-            if isinstance(out, dict):
-                if out.get("updated_profile") is not None:
-                    if user_email:
-                        set_user_profile(user_email, out["updated_profile"])
-                    else:
-                        for k, v in out["updated_profile"].items():
-                            memory.set_pref(k, v)
-                text = str(out.get("text", ""))
-                if text:
-                    speak(text)
-                    return text
-        except Exception:
-            pass
-
-    boss_fallback = _handle_boss_level()
-    if boss_fallback:
-        return boss_fallback
 
     # Final fallback
     speak("I didn't get that. Try asking me to open apps, play music, take notes, set reminders or search the web.")
