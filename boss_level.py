@@ -92,6 +92,9 @@ class BossLevelEngine:
         state.setdefault("mood", "neutral")
         state.setdefault("time_era", "modern")
         state.setdefault("npc_index", 0)
+        state.setdefault("effects_window_open", False)
+        state.setdefault("effects_window_opened_at", 0.0)
+        state.setdefault("effects_window_last_closed", 0.0)
         return state
 
     # -------------------- helpers --------------------
@@ -266,6 +269,8 @@ class BossLevelEngine:
         state = self._ensure_state(profile)
         self._update_reputation(lower, state)
 
+        allow_effects = self._effects_window_open(state)
+
         segments: List[Dict[str, Any]] = []
         triggered = False
 
@@ -274,7 +279,7 @@ class BossLevelEngine:
             segments.append(self._text_segment(roulette))
             triggered = True
 
-        if "time travel" in lower or (time.time() - self.last_time_travel > 90 and random.random() < 0.25):
+        if allow_effects and ("time travel" in lower or (time.time() - self.last_time_travel > 90 and random.random() < 0.25)):
             segments.append(self._time_travel_line(cmd, state))
             triggered = True
 
@@ -287,13 +292,19 @@ class BossLevelEngine:
             segments.append(self._text_segment(self._meme_injection()))
             triggered = True
 
-        if "npc" in lower or random.random() < 0.25:
+        if allow_effects and ("npc" in lower or random.random() < 0.25):
             segments.append(self._npc_line(state))
             triggered = True
 
         if "chaos" in lower or random.random() < 0.1:
-            segments.extend(self._chaos_event())
-            triggered = True
+            chaos_chunks = []
+            for chunk in self._chaos_event():
+                if chunk.get("type") == "effect" and not allow_effects:
+                    continue
+                chaos_chunks.append(chunk)
+            if chaos_chunks:
+                segments.extend(chaos_chunks)
+                triggered = True
 
         prank = self._maybe_prank(state)
         if prank:
@@ -308,16 +319,53 @@ class BossLevelEngine:
         if not triggered:
             return None
 
-        segments.append(self._chat_animation())
-        segments.append(self._mood_music(state))
-        segments.append(self._reaction_gif())
+        if allow_effects:
+            segments.append(self._chat_animation())
+            segments.append(self._mood_music(state))
+            segments.append(self._reaction_gif())
         segments.append(self._text_segment(self._reputation_summary(state)))
 
         segments = self._apply_mood_swaps(segments)
 
         plain_text = "\n".join(s["text"] for s in segments if s.get("type") in {"text", "animation", "effect"} and s.get("text"))
         glitch_segment = self._maybe_glitch_segment(plain_text, lower)
-        if glitch_segment:
+        if glitch_segment and allow_effects:
             segments.append(glitch_segment)
 
         return {"text": plain_text, "segments": segments, "updated_profile": profile}
+
+    def _effects_window_open(self, state: Dict[str, Any]) -> bool:
+        """Allow visual/glitch effects only during 2-minute windows that re-open every 10 minutes."""
+        now = time.time()
+        window_len = 120  # seconds effects stay active
+        cooldown = 600    # seconds between windows
+
+        open_flag = bool(state.get("effects_window_open", False))
+        opened_at = float(state.get("effects_window_opened_at", 0.0) or 0.0)
+        last_closed = float(state.get("effects_window_last_closed", 0.0) or 0.0)
+
+        if open_flag and opened_at > 0 and (now - opened_at) >= window_len:
+            open_flag = False
+            state["effects_window_open"] = False
+            state["effects_window_last_closed"] = now
+            last_closed = now
+
+        if open_flag:
+            return True
+
+        # If we've never opened before, kick things off immediately
+        if opened_at == 0.0 and last_closed == 0.0:
+            state["effects_window_open"] = True
+            state["effects_window_opened_at"] = now
+            return True
+
+        marker = last_closed if last_closed else opened_at
+        if marker == 0.0:
+            marker = now - cooldown
+
+        if (now - marker) >= cooldown:
+            state["effects_window_open"] = True
+            state["effects_window_opened_at"] = now
+            return True
+
+        return False
