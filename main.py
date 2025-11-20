@@ -991,6 +991,21 @@ def web_search_duckduckgo(query: str, limit: int = 3):
     except Exception as e:
         return f"Search error: {e}"
 
+def duckduckgo_search_text(query: str, limit: int = 3) -> str:
+    """Run a DuckDuckGo search and emit the formatted result to the web UI."""
+    clean = (query or "").strip()
+    if not clean:
+        return "Please provide a topic to search."
+    text = web_search_duckduckgo(clean, limit=limit)
+    if not isinstance(text, str):
+        text = str(text)
+    final = text.strip() or f"I couldn't find anything useful for '{clean}'."
+    try:
+        emit_to_ui("new_message", {"text": final, "query": clean, "source": "duckduckgo"})
+    except Exception:
+        pass
+    return final
+
 def handle_small_talk(cmd: str) -> Optional[str]:
     """Return a friendly canned reply for small-talk type inputs, or None if not handled."""
     cmd_lower = cmd.lower()

@@ -39,10 +39,10 @@ MEME_REACTIONS = [
     "Galaxy brain sequence unlocked.",
 ]
 
-ASCII_ANIMATIONS = [
-    "🔥  ~\\~  ~/~  flames flicker in ASCII",
-    "➡️ ➡️ ➡️  data arrows sweep across the screen",
-    "\\\\    dragon wings flap    //",
+CHAT_ANIMATIONS = [
+    {"animation": "flames", "text": "Boss-level flames surround the console"},
+    {"animation": "arrows", "text": "Data arrows sweep across the screen"},
+    {"animation": "dragon", "text": "Dragon wings flap above your terminal"},
 ]
 
 NPC_POOL = [
@@ -53,9 +53,9 @@ NPC_POOL = [
 ]
 
 CHAOS_EVENTS = [
-    "Suddenly the terminal showers confetti 🎉",
-    "Draco sneezes and flips your todo list!",
-    "A wormhole opens, rearranging your emojis.",
+    {"effect": "confetti", "text": "Suddenly the terminal showers confetti!"},
+    {"effect": "glitch", "text": "Draco sneezes and flips your todo list!"},
+    {"effect": "portal", "text": "A wormhole opens, rearranging your emojis."},
 ]
 
 SECRET_REFERENCES = {
@@ -66,10 +66,10 @@ SECRET_REFERENCES = {
 }
 
 REACTION_GIFS = [
-    "[GIF] (╯°□°)╯︵ ┻━┻",
-    "[GIF] (☞ﾟヮﾟ)☞",
-    "[GIF] (ง'̀-'́)ง",
-    "[GIF] ¯\\_(ツ)_/¯",
+    {"label": "table_flip", "url": "https://media.giphy.com/media/l46CkATpdyLwLI7vi/giphy.gif"},
+    {"label": "cheer", "url": "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif"},
+    {"label": "battle_ready", "url": "https://media.giphy.com/media/3o7btPCcdNniyf0ArS/giphy.gif"},
+    {"label": "shrug", "url": "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif"},
 ]
 
 class BossLevelEngine:
@@ -107,37 +107,61 @@ class BossLevelEngine:
                 chars.append(ch)
         return "".join(chars)
 
-    def _time_travel_line(self, command: str, state: Dict[str, Any]) -> str:
+    def _time_travel_line(self, command: str, state: Dict[str, Any]) -> Dict[str, Any]:
         era = random.choice(TIME_ERAS)
         state["time_era"] = era["name"]
         self.last_time_travel = time.time()
-        return f"{era['prefix']} {era['tone'].format(command=command)}"
+        return {
+            "type": "animation",
+            "animation": "time_travel",
+            "text": f"{era['prefix']} {era['tone'].format(command=command)}",
+        }
 
-    def _mood_music(self, state: Dict[str, Any]) -> str:
+    def _mood_music(self, state: Dict[str, Any]) -> Dict[str, Any]:
         vibes = [
             "🎵 Intense boss-battle strings surge!",
             "🎶 Soft lo-fi beats wrap around the terminal.",
             "🥁 Drumline of productivity rattles on your desk.",
             "🎷 Jazzy improv while you debug.",
         ]
-        return random.choice(vibes)
+        return {
+            "type": "effect",
+            "effect": "mood_bubble",
+            "text": random.choice(vibes),
+        }
 
-    def _chat_animation(self) -> str:
-        return random.choice(ASCII_ANIMATIONS)
+    def _chat_animation(self) -> Dict[str, Any]:
+        anim = random.choice(CHAT_ANIMATIONS)
+        return {
+            "type": "animation",
+            "animation": anim["animation"],
+            "text": anim["text"],
+        }
 
-    def _npc_line(self, state: Dict[str, Any]) -> str:
+    def _npc_line(self, state: Dict[str, Any]) -> Dict[str, Any]:
         npc = NPC_POOL[state["npc_index"] % len(NPC_POOL)]
         state["npc_index"] = state["npc_index"] + 1
-        return f"{npc} pops in: 'Need backup on this command?'"
+        return {
+            "type": "npc",
+            "name": npc,
+            "line": "Need backup on this command?",
+        }
 
-    def _chaos_event(self) -> str:
-        return random.choice(CHAOS_EVENTS)
+    def _chaos_event(self) -> List[Dict[str, Any]]:
+        event = random.choice(CHAOS_EVENTS)
+        chunks: List[Dict[str, Any]] = []
+        if event.get("effect"):
+            chunks.append({"type": "effect", "effect": event["effect"]})
+        if event.get("text"):
+            chunks.append({"type": "text", "text": event["text"]})
+        return chunks
 
     def _meme_injection(self) -> str:
         return random.choice(MEME_REACTIONS)
 
-    def _reaction_gif(self) -> str:
-        return random.choice(REACTION_GIFS)
+    def _reaction_gif(self) -> Dict[str, Any]:
+        gif = random.choice(REACTION_GIFS)
+        return {"type": "gif", "url": gif["url"], "label": gif["label"]}
 
     def _maybe_prank(self, state: Dict[str, Any]) -> Optional[str]:
         pranks = [
@@ -209,19 +233,25 @@ class BossLevelEngine:
         )
         return "\n".join(filter(None, [battle, cutscene]))
 
-    def _apply_mood_swaps(self, segments: List[str]) -> str:
-        mixed = []
+    def _apply_mood_swaps(self, segments: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         moods = MOOD_STYLES.copy()
+        if not moods:
+            return segments
         random.shuffle(moods)
         for seg in segments:
-            tag = moods[random.randint(0, len(moods) - 1)]
-            mixed.append(f"{tag} {seg}")
-        return "\n".join(mixed)
+            if seg.get("type") == "text" and "mood" not in seg:
+                seg["mood"] = random.choice(moods)
+        return segments
 
-    def _maybe_glitch_response(self, text: str, lower: str) -> str:
+    def _maybe_glitch_segment(self, text: str, lower: str) -> Optional[Dict[str, Any]]:
+        if not text:
+            return None
         if "glitch" in lower or random.random() < 0.15:
-            return self._glitch_text(text)
-        return text
+            return {"type": "glitch", "text": self._glitch_text(text)}
+        return None
+
+    def _text_segment(self, text: str) -> Dict[str, Any]:
+        return {"type": "text", "text": text}
 
     def _reputation_summary(self, state: Dict[str, Any]) -> str:
         rep = state["reputation"]
@@ -236,12 +266,12 @@ class BossLevelEngine:
         state = self._ensure_state(profile)
         self._update_reputation(lower, state)
 
-        segments: List[str] = []
+        segments: List[Dict[str, Any]] = []
         triggered = False
 
         roulette = self._command_roulette(cmd, lower, state)
         if roulette:
-            segments.append(roulette)
+            segments.append(self._text_segment(roulette))
             triggered = True
 
         if "time travel" in lower or (time.time() - self.last_time_travel > 90 and random.random() < 0.25):
@@ -250,11 +280,11 @@ class BossLevelEngine:
 
         rpg = self._rpg_battle(lower, state)
         if rpg:
-            segments.append(rpg)
+            segments.append(self._text_segment(rpg))
             triggered = True
 
         if "meme" in lower or random.random() < 0.2:
-            segments.append(self._meme_injection())
+            segments.append(self._text_segment(self._meme_injection()))
             triggered = True
 
         if "npc" in lower or random.random() < 0.25:
@@ -262,17 +292,17 @@ class BossLevelEngine:
             triggered = True
 
         if "chaos" in lower or random.random() < 0.1:
-            segments.append(self._chaos_event())
+            segments.extend(self._chaos_event())
             triggered = True
 
         prank = self._maybe_prank(state)
         if prank:
-            segments.append(prank)
+            segments.append(self._text_segment(prank))
             triggered = True
 
         secret = self._secret_reference(lower)
         if secret:
-            segments.append(secret)
+            segments.append(self._text_segment(secret))
             triggered = True
 
         if not triggered:
@@ -281,8 +311,13 @@ class BossLevelEngine:
         segments.append(self._chat_animation())
         segments.append(self._mood_music(state))
         segments.append(self._reaction_gif())
-        segments.append(self._reputation_summary(state))
+        segments.append(self._text_segment(self._reputation_summary(state)))
 
-        text = self._apply_mood_swaps(segments)
-        final = self._maybe_glitch_response(text, lower)
-        return {"text": final, "updated_profile": profile}
+        segments = self._apply_mood_swaps(segments)
+
+        plain_text = "\n".join(s["text"] for s in segments if s.get("type") in {"text", "animation", "effect"} and s.get("text"))
+        glitch_segment = self._maybe_glitch_segment(plain_text, lower)
+        if glitch_segment:
+            segments.append(glitch_segment)
+
+        return {"text": plain_text, "segments": segments, "updated_profile": profile}
