@@ -117,6 +117,11 @@ socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 # Limit uploads to 20 MB
 app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024
 
+@app.route("/")
+def home():
+    """Serve the main Draco web client."""
+    return send_from_directory(".", "draco.html")
+
 # ------------- Global utilities & config -------------
 MEMORY_FILE = "memory.json"
 NOTES_FILE = "notes.json"
