@@ -19,6 +19,116 @@
       --line: #2b2753;
     }
 
+    function clearSearchResults(){
+      if (searchResultsList) searchResultsList.innerHTML = '';
+      if (searchQueryLabel) searchQueryLabel.textContent = '';
+      if (searchPanel) searchPanel.classList.add('hidden');
+    }
+
+    function hostnameFromUrl(urlString){
+      try {
+        const u = new URL(urlString);
+        return u.hostname.replace('www.', '');
+      } catch (e) {
+        return urlString || '';
+      }
+    }
+
+    function renderSearchResults(payload){
+      if (!searchPanel || !searchResultsList) return;
+      const results = Array.isArray(payload && payload.results) ? payload.results : [];
+      if (searchQueryLabel) {
+        const q = (payload && payload.query) ? `“${payload.query}”` : 'Recent lookup';
+        searchQueryLabel.textContent = q;
+      }
+      searchResultsList.innerHTML = '';
+      if (!results.length) {
+        const empty = document.createElement('div');
+        empty.className = 'search-empty';
+        empty.textContent = 'No web results yet.';
+        searchResultsList.appendChild(empty);
+      } else {
+        results.forEach((r) => {
+          const row = document.createElement('div');
+          row.className = 'search-row';
+          const title = document.createElement('a');
+          title.href = r.href || '#';
+          title.target = '_blank';
+          title.rel = 'noopener noreferrer';
+          title.textContent = r.title || 'Result';
+          const snippet = document.createElement('div');
+          snippet.className = 'search-snippet';
+          snippet.textContent = r.snippet || 'No description available.';
+          const meta = document.createElement('div');
+          meta.className = 'search-meta';
+          meta.textContent = hostnameFromUrl(r.href || '');
+          row.appendChild(title);
+          row.appendChild(snippet);
+          row.appendChild(meta);
+          searchResultsList.appendChild(row);
+        });
+      }
+      searchPanel.classList.remove('hidden');
+    }
+
+    if (clearSearchBtn) {
+      clearSearchBtn.onclick = () => clearSearchResults();
+    }
+
+    function normalizeBossSegments(payload){
+      if (Array.isArray(payload && payload.segments)) {
+        return payload.segments;
+      }
+      const text = (payload && payload.text) ? String(payload.text).trim() : '';
+      if (!text) return [];
+      return text.split(/\n{2,}/).map((chunk) => ({ title: null, body: chunk.trim() }));
+    }
+
+    function renderBossLevelMessage(payload){
+      const card = document.createElement('div');
+      card.className = 'boss-level-card';
+      if (payload && payload.theme === 'glitch') {
+        card.classList.add('boss-glitch');
+      }
+      const title = payload && payload.title ? payload.title : 'Boss Level';
+      const titleEl = document.createElement('div');
+      titleEl.className = 'boss-level-title';
+      titleEl.textContent = title;
+      card.appendChild(titleEl);
+      const segments = normalizeBossSegments(payload);
+      segments.forEach((seg, idx) => {
+        const block = document.createElement('div');
+        block.className = 'boss-block';
+        const heading = document.createElement('div');
+        heading.className = 'boss-block-title';
+        heading.textContent = seg && seg.title ? seg.title : `Phase ${idx + 1}`;
+        const body = document.createElement('div');
+        body.className = 'boss-block-body';
+        body.textContent = seg && seg.body ? seg.body : '';
+        block.appendChild(heading);
+        block.appendChild(body);
+        card.appendChild(block);
+      });
+      appendItem(card, 'bot');
+    }
+
+    function handleNewMessage(payload){
+      if (!payload) return;
+      const kind = (payload.kind || '').toLowerCase();
+      if (kind === 'search') {
+        const msg = payload.text || `Search ready for ${payload.query || 'your query.'}`;
+        appendItem(msg, payload.role === 'user' ? 'user' : 'bot');
+        return;
+      }
+      if (kind === 'boss_level') {
+        renderBossLevelMessage(payload);
+        return;
+      }
+      if (payload.text) {
+        appendItem(payload.text, payload.role === 'user' ? 'user' : 'bot');
+      }
+    }
+
     * { box-sizing: border-box; }
     html, body { overflow-x: hidden; }
     body { font-family: 'Poppins', 'Inter', system-ui, Arial, sans-serif; margin: 0; color: var(--text);
@@ -180,6 +290,31 @@
     .dropzone.dragover { background: rgba(255, 170, 0, 0.08); border-color: var(--accent-2); }
     .progress { width:100%; height:8px; background: rgba(255,255,255,.15); border-radius:6px; overflow:hidden; margin-top:8px; }
     .progress > span { display:block; height:100%; width:0%; background: var(--accent-2); transition: width .15s linear; }
+    .search-panel { margin-top:14px; border:1px solid var(--line); border-radius:14px; background:rgba(10,8,26,0.75); padding:12px; display:flex; flex-direction:column; gap:10px; box-shadow:0 8px 18px rgba(0,0,0,.25); }
+    body.light-mode .search-panel { background: rgba(255,255,255,0.75); }
+    .search-panel.hidden { display:none; }
+    .search-header { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .search-title { font-weight:600; font-size:0.95rem; }
+    .search-query-label { font-size:0.85rem; color:var(--muted); }
+    .search-results-list { display:flex; flex-direction:column; gap:10px; }
+    .search-row { padding:10px 12px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); }
+    body.light-mode .search-row { background:rgba(255,255,255,0.5); border-color:rgba(255,120,60,0.25); }
+    .search-row a { color:#7dd3fc; font-weight:600; text-decoration:none; }
+    body.light-mode .search-row a { color:#b30000; }
+    .search-snippet { margin-top:4px; font-size:0.9rem; line-height:1.4; color:var(--text); }
+    .search-meta { margin-top:6px; font-size:0.8rem; color:var(--muted); display:flex; gap:6px; align-items:center; }
+    .search-empty { font-size:0.9rem; color:var(--muted); padding:6px 4px; }
+    .btn.mini { padding:6px 10px; font-size:0.8rem; border-radius:12px; text-transform:none; }
+    .boss-level-card { border:1px solid rgba(124,77,255,0.4); border-radius:16px; padding:14px; background:linear-gradient(135deg, rgba(37,20,79,0.9), rgba(20,10,40,0.85)); box-shadow:0 12px 28px rgba(0,0,0,0.35); margin-top:6px; }
+    body.light-mode .boss-level-card { background:linear-gradient(135deg, rgba(255,170,80,0.95), rgba(255,120,60,0.85)); border-color:rgba(255,120,60,0.45); color:#3c0a0a; }
+    .boss-level-title { font-size:1.1rem; font-weight:700; letter-spacing:0.4px; margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+    .boss-level-title span { font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
+    .boss-block { border-radius:12px; padding:10px 12px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.05); margin-top:8px; }
+    body.light-mode .boss-block { background:rgba(255,255,255,0.55); border-color:rgba(255,120,60,0.25); }
+    .boss-block-title { font-weight:600; font-size:0.95rem; margin-bottom:4px; display:flex; align-items:center; gap:6px; }
+    .boss-block-body { font-size:0.9rem; line-height:1.5; }
+    .boss-glitch { animation: glitchPulse 1.4s infinite; }
+    @keyframes glitchPulse { 0% { text-shadow:0 0 6px rgba(124,77,255,0.9);} 50% { text-shadow:0 0 14px rgba(124,77,255,0.6);} 100% { text-shadow:0 0 6px rgba(124,77,255,0.9);} }
     /* Animations */
     .fade-in { animation: fadeIn .28s ease-out both; }
     .slide-up { animation: slideUp .28s ease-out both; }
@@ -493,6 +628,16 @@
           <div class="chip pill" data-action="compare">Compare Files</div>
           <div class="chip pill" data-action="merge">Merge Files</div>
         </div>
+        <div id="searchPanel" class="search-panel hidden">
+          <div class="search-header">
+            <div>
+              <div class="search-title">Latest Web Search</div>
+              <div id="searchQueryLabel" class="search-query-label"></div>
+            </div>
+            <button type="button" class="btn mini" id="clearSearchBtn">Clear</button>
+          </div>
+          <div id="searchResultsList" class="search-results-list"></div>
+        </div>
         <small>Tip: Try "open youtube", "play music", "list notes", "remind me to drink water at 19:30"</small>
         <!-- Pomodoro coffee-cup widget -->
         <div id="pomodoroWidget" style="margin-top:14px; padding:10px 12px; border-radius:14px; border:1px solid rgba(255,255,255,0.2); background:rgba(8,6,20,0.6); display:flex; align-items:center; gap:16px; font-size:15px;">
@@ -560,6 +705,10 @@
     const xpBar = document.getElementById('xpBar');
     const modeChips = document.getElementById('modeChips');
     let lastGamestateLevel = null;
+    const searchPanel = document.getElementById('searchPanel');
+    const searchQueryLabel = document.getElementById('searchQueryLabel');
+    const searchResultsList = document.getElementById('searchResultsList');
+    const clearSearchBtn = document.getElementById('clearSearchBtn');
     const mobileMenuBtn = document.getElementById('mobileMenuBtn');
     const sideOverlay = document.getElementById('sideOverlay');
     const sideCloseBtn = document.getElementById('sideCloseBtn');
@@ -660,7 +809,7 @@
       typingIndicator.style.display = on ? 'flex' : 'none';
     }
 
-    function appendItem(text, who='bot') {
+    function appendItem(content, who='bot') {
       const row = document.createElement('div');
       row.className = 'chat-row ' + (who === 'bot' ? 'chat-row-bot' : 'chat-row-user');
 
@@ -671,7 +820,16 @@
 
       const bubble = document.createElement('div');
       bubble.className = 'item ' + (who === 'bot' ? 'bot-item' : 'user-item');
-      bubble.innerHTML = `<div class="${who}">${text}</div>`;
+      if (typeof content === 'string') {
+        bubble.innerHTML = `<div class="${who}">${content}</div>`;
+      } else if (content instanceof HTMLElement) {
+        const wrapper = document.createElement('div');
+        wrapper.className = `${who}-rich rich-block`;
+        wrapper.appendChild(content);
+        bubble.appendChild(wrapper);
+      } else {
+        bubble.innerHTML = `<div class="${who}"></div>`;
+      }
 
       // User tools: edit/resend last message
       if (who === 'user') {
@@ -1178,6 +1336,20 @@
       socket.on('reminder_fired', (payload) => {
         const t = payload && payload.text ? String(payload.text) : '';
         if (t) appendItem('⏰ ' + t, 'bot');
+      });
+
+      socket.on('search_results', (payload) => {
+        renderSearchResults(payload || {});
+      });
+
+      socket.on('new_message', (payload) => {
+        handleNewMessage(payload || {});
+      });
+
+      socket.on('level_up', (data) => {
+        const lvl = data && data.level ? ` You're now Level ${data.level}.` : '';
+        appendItem('Level up! 🎉' + lvl, 'bot');
+        refreshGamestate();
       });
     } else {
       statusText.textContent = 'HTTP mode';

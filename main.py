@@ -1060,66 +1060,212 @@ def convert_unit(cmd):
 
 # ------------- Search & utilities -------------
 def web_search_duckduckgo(query: str, limit: int = 3):
+    """Return structured DuckDuckGo search results (best-effort)."""
+    query = (query or "").strip()
+    if not query:
+        return []
     if DDGS is None:
-        return "ddgs package not installed."
+        return []
+    results = []
     try:
-        results = []
         with DDGS() as ddgs:
-            for r in ddgs.text(query, max_results=limit):
-                body = r.get("body", "").strip()
-                if body:
-                    results.append(body)
-        if not results:
-            return "I couldn't find anything useful for that query."
-        return "\n\n".join(results[:limit])
-    except Exception as e:
-        return f"Search error: {e}"
-
-def duckduckgo_search_text(query: str, limit: int = 3) -> str:
-    """Run a DuckDuckGo search and emit the formatted result to the web UI."""
-    clean = (query or "").strip()
-    if not clean:
-        return "Please provide a topic to search."
-    text = web_search_duckduckgo(clean, limit=limit)
-    if not isinstance(text, str):
-        text = str(text)
-    final = text.strip() or f"I couldn't find anything useful for '{clean}'."
-    try:
-        speak(final)
-        emit_to_ui("draco_response", {"text": final})
+            for r in ddgs.text(query, max_results=max(1, limit)):
+                title = (r.get("title") or r.get("href") or "Result").strip()
+                snippet = (r.get("body") or "").strip()
+                href = (r.get("href") or "").strip()
+                results.append({
+                    "title": title,
+                    "snippet": snippet,
+                    "href": href,
+                })
+                if len(results) >= limit:
+                    break
     except Exception:
-        pass
-    return final
+        return []
+    return results
 
-# Reminder block
-if "remind me to" in cmd or "set reminder to" in cmd:
-    before, atpart = cmd.split("at")
-    text = before.replace("remind me to", "").replace("set reminder to", "").strip()
-    now = datetime.datetime.now()
-    if ":" in atpart and len(atpart.split()) == 1:
-        hour, minute = map(int, atpart.split(":"))
-        when = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        if when < now:
-            when += datetime.timedelta(days=1)
-    else:
-        when = datetime.datetime.fromisoformat(atpart.strip())
-    rid = reminder_mgr.add(text, when)
-    r = f"Reminder set for {when.isoformat()}"
-    speak(r)
-    return r
-except Exception as e:
-    return f"Couldn't set reminder: {e}"
-return "Please include time with 'at'. Example: remind me to call mom at 19:30"
 
-# Summarize recent chat (study helper)
-if "summarize this chat" in cmd or "chat summary" in cmd:
-    sess = memory.get_session()[-40:]
-    if not sess:
-        return "There isn't enough recent chat to summarize yet."
-    text_blob = "\n".join(x.get("text", "") for x in sess if x.get("text"))
-    summary = _summarize_text(text_blob, max_len=800)
-    add_xp("study", 10)
-    return "Here is a short summary of our recent chat:\n" + summary
+SMALL_TALK_RESPONSES = {
+    "hi": "Hey there! ",
+    "hello": "Hello! Ready when you are.",
+    "how are you": "Doing great and ready to help!",
+    "thanks": "Happy to help!",
+    "thank you": "Anytime!",
+    "good morning": "Good morning! Let's make it productive.",
+    "good night": "Good night! Rest well.",
+}
+
+
+def _handle_small_talk(cmd_lower: str):
+    for key, reply in SMALL_TALK_RESPONSES.items():
+        if key in cmd_lower:
+            speak(reply)
+            return reply
+    return None
+
+
+def process_command(raw_cmd: str):
+    """Map raw user phrases to actions."""
+    if not raw_cmd:
+        return "Please say something."
+
+    cmd_clean = raw_cmd.strip()
+    cmd = cmd_clean.lower()
+
+    _maybe_award_keyword_xp(cmd)
+
+    memory.add(f"You: {raw_cmd}")
+    user_email = get_logged_in_email()
+    if user_email:
+        try:
+            save_chat_line(user_email, "user", raw_cmd)
+        except Exception:
+            pass
+
+    personality.update(cmd)
+
+    # Small talk first
+    small = _handle_small_talk(cmd)
+    if small:
+        return small
+
+    # Intro handler
+    if _handle_intro_request:
+        intro_reply = _handle_intro_request(cmd)
+        if intro_reply:
+            speak(intro_reply)
+            return intro_reply
+
+    # Reminder block
+    if "remind me to" in cmd or "set reminder to" in cmd:
+        try:
+            if " at " in cmd:
+                before, atpart = cmd.split(" at ", 1)
+            elif "at" in cmd:
+                before, atpart = cmd.split("at", 1)
+            else:
+                return "Please include time with 'at'. Example: remind me to call mom at 19:30"
+            text = (
+                before.replace("remind me to", "")
+                .replace("set reminder to", "")
+                .strip()
+            )
+            if not text:
+                return "What should I remind you about?"
+            now = datetime.datetime.now()
+            atpart = atpart.strip()
+            if ":" in atpart and len(atpart.split()) == 1:
+                hour, minute = map(int, atpart.split(":"))
+                when = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+                if when < now:
+                    when += datetime.timedelta(days=1)
+            else:
+                when = datetime.datetime.fromisoformat(atpart)
+            rid = reminder_mgr.add(text, when)
+            r = f"Reminder set for {when.isoformat()} (ID {rid})"
+            speak(r)
+            emit_to_ui("reminder_created", {"id": rid, "text": text, "when": when.isoformat()})
+            return r
+        except Exception as e:
+            return f"Couldn't set reminder: {e}"
+
+    if "list reminders" in cmd:
+        data = reminder_mgr.list()
+        if not data:
+            return "No reminders saved."
+        lines = [f"{r['id']}: {r['text']} at {r['at']}" for r in data]
+        return "Reminders:\n" + "\n".join(lines)
+
+    if cmd.startswith("delete reminder"):
+        try:
+            parts = cmd.split()
+            rid = int(parts[-1])
+            reminder_mgr.remove(rid)
+            return f"Deleted reminder {rid}."
+        except Exception:
+            return "Please say: delete reminder <id>."
+
+    # Notes
+    if cmd.startswith("take note") or cmd.startswith("note "):
+        original = cmd_clean
+        if cmd.startswith("take note"):
+            note_text = original[len("take note"):].strip()
+        else:
+            note_text = original[len("note "):].strip()
+        if not note_text:
+            return "Please say the note text."
+        nid = notes_mgr.add(note_text)
+        add_xp("study", 4)
+        r = f"Note saved. ID {nid}"
+        speak(r)
+        return r
+
+    if "list notes" in cmd or "show notes" in cmd:
+        notes = notes_mgr.list()
+        if not notes:
+            return "No notes."
+        short = "; ".join([f"{i + 1}. {n['text']}" for i, n in enumerate(notes[:6])])
+        speak("Reading notes.")
+        add_xp("study", 2)
+        return short
+
+    search_query = _extract_search_query_text(cmd_clean, cmd)
+    if search_query is not None:
+        if not search_query:
+            return "What should I search for?"
+        _, summary = run_structured_search(search_query, limit=5, source="command")
+        add_xp("study", 6)
+        speak(f"Sharing top search hits for {search_query}.")
+        return summary
+
+    # Content generation / academics
+    if cmd.startswith("generate doc on ") or cmd.startswith("create doc on "):
+        topic = cmd.replace("generate doc on ", "", 1).replace("create doc on ", "", 1).strip()
+        if not topic:
+            return "Please provide a topic for the document."
+        points = research_query_to_texts(topic, limit=10)
+        try:
+            path = _generate_docx(f"{topic.title()} - Notes", points)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            speak("Your document is ready, I've created a download link.")
+            return {"text": f"Generated DOCX for {topic}. Download: {url}", "action": "open_url", "url": url}
+        except Exception as e:
+            return f"Could not generate DOCX: {e}"
+
+    if cmd.startswith("generate pdf on ") or cmd.startswith("create pdf on "):
+        topic = cmd.replace("generate pdf on ", "", 1).replace("create pdf on ", "", 1).strip()
+        if not topic:
+            return "Please provide a topic for the PDF."
+        points, sources = research_query_to_texts_with_sources(topic, limit=12)
+        try:
+            path = _generate_pdf(f"{topic.title()} - Report", points, sources=sources)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            speak("Your PDF report is ready, I've created a download link.")
+            return {"text": f"Generated PDF for {topic}. Download: {url}", "action": "open_url", "url": url}
+        except Exception as e:
+            return f"Could not generate PDF: {e}"
+
+    if cmd.startswith("generate notes on ") or cmd.startswith("create notes on "):
+        topic = cmd.replace("generate notes on ", "", 1).replace("create notes on ", "", 1).strip()
+        if not topic:
+            return "Please provide a topic for the notes."
+        points, sources = research_query_to_texts_with_sources(topic, limit=10)
+        try:
+            lines = list(points)
+            if sources:
+                lines.append("")
+                lines.extend(sources)
+            speak("Your notes are ready.")
+            return {"text": f"Generated notes for {topic}.", "action": "show_notes", "notes": lines}
+        except Exception as e:
+            return f"Could not generate notes: {e}"
+
+    # Summarize recent chat (study helper)
+    if "summarize this chat" in cmd or "chat summary" in cmd:
+        sess = memory.get_session()[-40:]
+        if not sess:
             return "There isn't enough recent chat to summarize yet."
         text_blob = "\n".join(x.get("text", "") for x in sess if x.get("text"))
         summary = _summarize_text(text_blob, max_len=800)
@@ -1260,11 +1406,6 @@ if "summarize this chat" in cmd or "chat summary" in cmd:
     # Final fallback
     speak("I didn't get that. Try asking me to open apps, play music, take notes, set reminders or search the web.")
     return "Unknown command. Try: open youtube, play music, take note, set reminder, search for ..."
-
-
-# ------------- Flask / SocketIO endpoints -------------
-@app.route("/")
-def index():
     # Always show main app; login removed
     return send_from_directory(".", "draco.html")
 
