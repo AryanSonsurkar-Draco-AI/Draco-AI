@@ -95,6 +95,11 @@ try:
 except Exception:
     draco_chat = None
 
+try:
+    from draco_intro import handle_intro as _handle_intro_request
+except Exception:
+    _handle_intro_request = None
+
 # Disable legacy draco_chat fallback responses (keep routing in main.py only)
 draco_chat = None
 
@@ -374,29 +379,96 @@ def _xp_needed(level: int) -> int:
 
 def add_xp(kind: str, amount: int):
     """Award XP for an action kind (study/coding/general)."""
-    if amount <= 0:
-        return
     g = _ensure_gamification()
+
+    if amount <= 0:
+        return {
+            "gained": 0,
+            "levels_gained": 0,
+            "level": g.get("level", 1),
+            "xp": g.get("xp", 0),
+            "xp_needed": _xp_needed(g.get("level", 1)),
+            "total_xp": g.get("total_xp", 0),
+            "kind": kind,
+        }
+
     # small boost based on current mode
     mode = g.get("mode", "balanced")
     boost = 1.0
+
     if mode == "study" and kind == "study":
         boost = 1.2
     elif mode == "coding" and kind == "coding":
         boost = 1.2
+
     gained = int(amount * boost)
+
     g["xp"] = int(g.get("xp", 0)) + gained
     g["total_xp"] = int(g.get("total_xp", 0)) + gained
     g["last_action"] = {"kind": kind, "amount": gained, "ts": time.time()}
 
     # Level up loop
+    levels_gained = 0
     while g["xp"] >= _xp_needed(g["level"]):
         needed = _xp_needed(g["level"])
         g["xp"] -= needed
         g["level"] += 1
+        levels_gained += 1
 
     memory.long["gamification"] = g
     memory._save()
+
+    result = {
+        "gained": gained,
+        "levels_gained": levels_gained,
+        "level": g["level"],
+        "xp": g["xp"],
+        "xp_needed": _xp_needed(g["level"]),
+        "total_xp": g.get("total_xp", 0),
+        "kind": kind,
+    }
+
+    if levels_gained:
+        msg = f" Level up! You're now Level {g['level']} (XP {g['xp']}/{result['xp_needed']})."
+        memory.add(f"System: {msg}")
+        emit_to_ui("draco_response", {"text": msg})
+        emit_to_ui("level_up", {
+            "level": g["level"],
+            "xp": g["xp"],
+            "xp_needed": result["xp_needed"],
+            "kind": kind,
+        })
+
+    email = get_logged_in_email()
+    if email:
+        try:
+            prof = get_user_profile(email)
+            prof["level"] = g["level"]
+            prof["xp"] = g.get("total_xp", 0)
+            set_user_profile(email, prof)
+        except Exception:
+            pass
+
+    return result
+
+
+XP_KEYWORD_RULES = [
+    {"kind": "study", "amount": 6, "terms": ["study", "exam", "test", "revision", "revise", "assignment", "homework", "flashcard", "notes", "note ", "note", "memorize", "syllabus"]},
+    {"kind": "study", "amount": 5, "terms": ["research", "summarize", "summary", "analysis", "analyze", "outline", "explain", "reference"]},
+    {"kind": "coding", "amount": 6, "terms": ["code", "coding", "program", "script", "develop", "feature", "algorithm", "function"]},
+    {"kind": "coding", "amount": 7, "terms": ["bug", "error", "stack trace", "issue", "crash", "fix", "broken", "failure", "exception"]},
+    {"kind": "coding", "amount": 8, "terms": ["refactor", "cleanup", "optimize", "improve structure", "rewrite", "tidy code"]},
+    {"kind": "study", "amount": 4, "terms": ["challenge", "quest", "focus", "grind", "level up", "xp"]},
+]
+
+
+def _maybe_award_keyword_xp(cmd: str):
+    if not cmd:
+        return
+    lower = cmd.lower()
+    for rule in XP_KEYWORD_RULES:
+        if any(term in lower for term in rule["terms"]):
+            add_xp(rule["kind"], rule["amount"])
 
 
 def get_gamestate():
@@ -630,12 +702,17 @@ class PomodoroManager:
 
             # emit tick update outside lock
             progress = max(0.0, min(1.0, 1.0 - (remaining / float(total))))
-            emit_to_ui("pomodoro_tick", {
-                "mode": mode,
-                "remaining_seconds": remaining,
-                "total_seconds": total,
-                "progress": progress,
-            })
+            socketio.emit(
+                "pomodoro_tick",
+                {
+                    "mode": mode,
+                    "remaining_seconds": remaining,
+                    "total_seconds": total,
+                    "progress": progress,
+                },
+                namespace="/",
+                broadcast=True,
+            )
             emit_to_ui("play_beep", {"kind": "tick"})
             if remaining <= 0:
                 final_text = "Pomodoro done! ☕ All gone! Take a short break 😎"
@@ -1008,589 +1085,41 @@ def duckduckgo_search_text(query: str, limit: int = 3) -> str:
         text = str(text)
     final = text.strip() or f"I couldn't find anything useful for '{clean}'."
     try:
-        emit_to_ui("new_message", {"text": final, "query": clean, "source": "duckduckgo"})
+        speak(final)
+        emit_to_ui("draco_response", {"text": final})
     except Exception:
         pass
     return final
 
-def handle_small_talk(cmd: str) -> Optional[str]:
-    """Return a friendly canned reply for small-talk type inputs, or None if not handled."""
-    cmd_lower = cmd.lower()
+# Reminder block
+if "remind me to" in cmd or "set reminder to" in cmd:
+    before, atpart = cmd.split("at")
+    text = before.replace("remind me to", "").replace("set reminder to", "").strip()
+    now = datetime.datetime.now()
+    if ":" in atpart and len(atpart.split()) == 1:
+        hour, minute = map(int, atpart.split(":"))
+        when = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if when < now:
+            when += datetime.timedelta(days=1)
+    else:
+        when = datetime.datetime.fromisoformat(atpart.strip())
+    rid = reminder_mgr.add(text, when)
+    r = f"Reminder set for {when.isoformat()}"
+    speak(r)
+    return r
+except Exception as e:
+    return f"Couldn't set reminder: {e}"
+return "Please include time with 'at'. Example: remind me to call mom at 19:30"
 
-    # Let the central joke handler in process_command handle all joke/funny/meme phrases
-    if "joke" in cmd_lower or "funny" in cmd_lower or "meme" in cmd_lower:
-        return None
-
-    # Exact greetings with your custom lines
-    if cmd_lower == "hi":
-        reply = "Hey! Ready to tackle today?"
-        speak(reply)
-        return reply
-    if cmd_lower == "hello":
-        reply = "Hello! What's our first mission today?"
-        speak(reply)
-        return reply
-
-    # Generic greeting fallback
-    if any(x in cmd_lower for x in ["hello", "hi", "hey"]):
-        reply = personality.respond(f"Hello {memory.get_pref('name', 'friend')}! How can I help?")
-        speak(reply)
-        user_email = get_logged_in_email()
-        if user_email:
-            prof = get_user_profile(user_email)
-            name = prof.get("name") or memory.get_pref('name', 'friend')
-            reply = reply.replace("friend", name)
-        return reply
-
-    # Map of many friendly small-talk / motivation phrases
-    responses = {
-        "how are you": "I'm good, pumped to help you out!",
-        "i am tired": "Rest a bit, then we'll crush the next task.",
-        "i need motivation": "Even one small action today adds XP for tomorrow.",
-        "am i improving": "Absolutely. Every effort counts, keep stacking wins.",
-        "i am sad": "It's okay to feel down. You're stronger than you think.",
-        "cheer me up": "You’ve survived every tough day so far. Today is no different.",
-        "give me study tips": "Short focused sessions beat long distracted hours. Test yourself often.",
-        "i failed": "Failure is feedback. Adjust and come back smarter.",
-        "good morning": "Good morning! What's the first XP you want to collect today?",
-        "good night": "Good night. Rest well, tomorrow we grind smarter.",
-        "funny": "Error 404: Boredom not found. Let's laugh at life a bit!",
-        "i am nervous": "Take a deep breath. You've trained for this. Step forward confidently.",
-        "i am stressed": "Focus on one thing at a time. Small XP wins reduce stress.",
-        "i am bored": "Let's turn this boredom into something epic. Want a challenge?",
-        "i feel weak": "Even heroes start weak. Strength grows one step at a time.",
-        "give me a quote": "Discipline beats motivation. Show up even when you don't feel like it.",
-        "coding help": "Break the problem into pieces, test each, debug efficiently.",
-        "anime mode": "Rasengan charging, Mangekyo Sharingan scanning, Ultra Instinct ready.",
-        "fight mode": "Battle mode activated. Flame Breathing ignited, Domain Expansion active.",
-        "study mode": "Focus engaged, distractions off. Every chapter completed is XP gained.",
-        "morning motivation": "Rise, shine, and collect today's XP!",
-        "evening motivation": "Reflect on wins, rest, and prepare for tomorrow's challenges.",
-        "i am hungry": "Fuel up! Strong body, strong mind. What are you having?",
-        "i am sleepy": "Sleep is XP for your brain. Rest now, tomorrow we grind smarter.",
-        "i am frustrated": "Frustration is XP before mastery. Keep going, you'll get there.",
-        "i am worried": "Worry is wasted energy. Focus on what you can control.",
-        "project advice": "Break it into milestones, complete each, and celebrate progress.",
-        "quick tip": "Focus on one task at a time. Multitasking is an XP trap.",
-        "i need focus": "Clear your space, silence distractions, and attack your top priority.",
-        "challenge me": "I dare you to finish the next task without checking your phone. Level up!",
-        "i want to improve": "Consistency is key. Small daily improvements stack into mastery.",
-        "funny anime": "Why did Goku go to school? To get a little 'super' education.",
-        "meme": "Life is like a debug log—messy but fixable.",
-        "help me sleep": "Close your eyes, breathe, imagine leveling up while you rest.",
-        "focus mode": "Head down, XP up. Nothing breaks your focus today.",
-        "life hack": "Batch small tasks together, and you'll finish more with less energy.",
-        "success mindset": "Think like a winner: plan, execute, review, repeat.",
-        "daily motivation": "Every day is a new XP grind. Fight, learn, grow stronger.",
-        "i am lost": "Take one step. Then another. Small moves create a path forward.",
-        "anime advice": "Train like Naruto, plan like Shikamaru, never quit like Luffy.",
-        "coding motivation": "Every bug is XP. Every fix is mastery. Keep coding.",
-        "study motivation": "Each page completed is XP earned. Keep stacking progress.",
-        "morning hype": "Rise and shine! Time to collect XP and defeat today's bosses.",
-        "evening reflection": "Review your XP gained today. Plan tomorrow's grind.",
-        "i am lazy": "Small effort beats zero effort. Just start, momentum follows.",
-        "i need help coding": "Break your problem into functions and tackle them one by one.",
-        "funny shonen moment": "Why did Naruto bring a ladder? To reach his next level!",
-        "give me life tip": "Focus on what you can control, improve daily, and trust your process.",
-        "i am stuck": "Take a deep breath, try a different angle, small steps lead forward.",
-        "how to keep focus": "Silence distractions, set short timers, and track progress.",
-        "funny daily quote": "I would exercise, but my coffee is watching me.",
-        "study encouragement": "Every page you finish is XP earned. Keep stacking!",
-        "anime humor": "Why did Goku carry a notebook? To keep track of his power levels!",
-        "coding encouragement": "Every bug solved is XP gained. You're leveling fast.",
-        "daily xp tip": "One focused task completed > five half-done tasks.",
-        "i feel anxious": "Focus on one small step, then the next. You're capable.",
-        "help me relax": "Breathe, stretch, visualize success. XP restored.",
-        "funny life moment": "Why did the gamer cross the road? To reach level 2.",
-        "coding humor": "Why did the function break up with the variable? Too many arguments.",
-        "anime help me": "Believe like Luffy, plan like Shikamaru, fight like Naruto.",
-        "study hack": "Pomodoro technique: 25 minutes focus, 5 minutes rest, repeat.",
-        "morning productivity tip": "Do your hardest XP task first, energy is highest now.",
-        "evening productivity tip": "Review today's XP gains, set small wins for tomorrow.",
-        "funny support": "Even heroes need laughs. Why did the AI cross the server? To reach the cloud!",
-        "coding motivation morning": "Debug, compile, conquer. Your code is leveling today.",
-        "anime motivation morning": "Rise like a shonen hero, today's XP is waiting!",
-        "evening anime motivation": "Rest, reflect, then prepare to conquer tomorrow like a hero.",
-        "how to deal with failure": "Failure is feedback. Learn, adjust, and XP up next time.",
-        "funny quote for friends": "I would clean my room, but my Wi-Fi told me to wait.",
-        "study tip for exams": "Short focused blocks, repeated testing, review mistakes, XP gained.",
-        "coding advice": "Start small, test often, debug like a hero.",
-        "anime advice quote": "Never give up, even if the odds are against you.",
-        "i feel lazy today": "One small action beats none. Let's take that first step.",
-        "morning cheer up": "Good morning! XP and new opportunities await today.",
-        "evening cheer up": "Reflect on your wins today. XP collected, rest now.",
-        "i am feeling sleepy": "Rest up, XP regenerates when you recharge.",
-        "give me quick tip": "Focus on one thing at a time and finish it fully.",
-        "how to stay positive": "Count wins, learn from losses, and keep moving forward.",
-        "i am bored with life": "Try a new XP challenge: learn, draw, or code something small.",
-        "help me with coding problem": "Break it into small steps and tackle one function at a time.",
-        "funny story": "Once, a gamer slept through XP farming… and woke up a hero!",
-        "daily inspiration": "Small wins every day lead to epic levels in life.",
-        "how to beat laziness": "Start with one small task. Momentum builds quickly.",
-        "i need encouragement": "You've got this. Even small progress counts as XP.",
-        "funny anime quote": "Why did Goku take a nap? He needed to level up!",
-        "how to stay focused": "Short sprints, no distractions, track your XP.",
-        "funny tech joke": "Why did the programmer quit? Too many exceptions in life.",
-        "give me inspiration": "Discipline beats motivation. Show up and XP will follow.",
-        "morning cheer": "New day, new XP, new chance to level up.",
-        "evening cheer": "Reflect on XP earned, rest, then grind tomorrow.",
-        "how to learn coding fast": "Start small, debug often, and learn by doing.",
-        "how to memorize better": "Repeat, test yourself, and link new info to what you know.",
-        "funny quote for today": "I would exercise, but my coffee told me to wait.",
-        "study encouragement morning": "Focus on one chapter first. XP will stack quickly.",
-        "study encouragement evening": "Review what you learned, XP collected, and plan next steps.",
-        "daily coding tip": "Write clean functions, test often, debug like a pro.",
-        "anime motivation quote": "Believe in your strength, train hard, and never give up.",
-        "daily xp hack": "Focus on one task fully instead of many half-done ones.",
-        "i feel anxious today": "One small step at a time. You've got the skills to XP up.",
-        "help me relax": "Breathe deeply, visualize success, and XP will restore.",
-        "funny programming moment": "Why did the function break up with the variable? Too many arguments.",
-        "morning coding motivation": "Debug, compile, conquer. Today's code is XP gained.",
-        "evening coding motivation": "Reflect on fixes, plan tomorrow's XP, rest well.",
-        "funny shonen anime joke": "Why did Naruto bring a ladder? To reach his next level!",
-        "give me life lesson": "Learn from failures, XP grows from experience.",
-        "i am stuck on a problem": "Take a step back, think differently, and try small moves.",
-        "how to stay disciplined at coding": "Show up daily, even for 15 minutes, XP stacks fast.",
-        "funny anime tts joke": "Why did Goku carry a notebook? To track his power levels!",
-        "study motivation afternoon": "Short sprints now will save hours later.",
-        "coding motivation afternoon": "Even small code adds XP. Keep leveling up!",
-        "morning life motivation": "Rise like a hero, today is full of XP to earn!",
-        "evening life motivation": "Reflect, recharge, prepare to conquer tomorrow.",
-        "funny coding tts line": "Why do programmers prefer dark mode? Light attracts bugs.",
-        "funny anime for friends": "Why did Luffy refuse to fight? He was busy eating meat!",
-        "quick study tip": "Active recall + Pomodoro blocks = maximum XP gain.",
-        "quick coding tip": "Test small pieces often, fix bugs immediately.",
-        "daily motivation morning": "Collect XP, level up, and start strong!",
-        "daily motivation evening": "Rest, reflect on XP earned, then plan tomorrow.",
-        "how to stay positive while stressed": "Focus on what you can control, take one XP step at a time.",
-        "funny quote for students": "I would study, but my coffee said wait!",
-        "coding humor for friends": "Why did the loop break up with the variable? Too clingy!",
-        "anime humor tts": "Why did Goku refuse to sleep? Too many levels to grind!",
-        "morning energy tip": "Water, stretch, tackle one key XP task first.",
-        "evening energy tip": "Reflect, rest, plan tomorrow's XP.",
-        "i feel lazy today": "Just one small action beats none. Start now!",
-        "coding support": "Break problems into small steps and conquer one by one.",
-        "anime encouragement": "Fight like a shonen hero, XP grows with persistence.",
-        "study encouragement": "Every page you complete is XP earned. Keep stacking!",
-        "funny coding quote": "Why did the computer go to therapy? Too many bytes of stress.",
-        "funny anime joke for tts": "Why did Naruto bring a map? To find his XP path!",
-        "i feel sad": "It's okay, even heroes have off days. One small step helps.",
-        "study help now": "Focus on one chapter, test yourself, XP gained.",
-        "coding help now": "Debug small parts first, then integrate slowly.",
-        "anime advice now": "Believe in your strength and never give up.",
-        "daily life tip": "Small consistent actions stack into epic wins.",
-        "funny life joke": "Why did the gamer cross the road? To reach level 2!",
-        "morning inspiration": "New XP to earn today! Rise and attack it.",
-        "evening inspiration": "Reflect, rest, and plan tomorrow's leveling.",
-        "quick encouragement": "Even one small XP step today adds up for tomorrow.",
-        "study motivation quick": "Short focus blocks + active recall = max XP.",
-        "coding motivation quick": "Every small bug fixed is XP gained. Keep going.",
-        "anime motivational line": "Train like Naruto, plan like Shikamaru, never quit.",
-        "morning xp tip": "Do hardest task first, energy is highest now.",
-        "evening xp tip": "Review XP collected, plan small wins for tomorrow.",
-        "funny anime morning joke": "Why did Luffy bring a ladder? To reach his XP level!",
-        "funny anime evening joke": "Why did Naruto take a nap? To level up overnight!",
-        "daily encouragement morning": "Rise, grind, and collect XP today!",
-        "daily encouragement evening": "Reflect on wins, rest, and prepare tomorrow.",
-        "coding advice quick": "Test often, debug fast, write small functions.",
-        "study advice quick": "Pomodoro, active recall, review mistakes for XP.",
-        "funny life moment quick": "I would clean my room, but my Wi-Fi told me to wait.",
-        "funny coding moment quick": "Why do programmers hate nature? Too many bugs.",
-        "anime encouragement quick": "XP grows with persistence. Train like a hero.",
-        "daily motivation short": "Stack XP with small wins every day.",
-        "morning energy short": "Hydrate, stretch, tackle one key XP task.",
-        "evening energy short": "Reflect, rest, and plan tomorrow's XP.",
-        "i feel lazy quick": "One small step is better than none.",
-        "study help quick": "Focus on one chapter, test yourself, gain XP.",
-        "coding help quick": "Debug one piece at a time, then integrate.",
-        "anime advice quick": "Believe in your strength, never quit, XP grows.",
-    }
-
-    # direct substring match over the mapping keys
-    for key, reply in responses.items():
-        if key in cmd_lower:
-            speak(reply)
-            return reply
-
-    # identity fallback
-    if "who are you" in cmd_lower or "what's your name" in cmd_lower:
-        reply = "I am Draco AI made by Aryan and his co-workers which are kaustubh and ritesh."
-        speak(reply)
-        return reply
-
-    return None
-
-
-# ------------- Command processing (central router) -------------
-def process_command(raw_cmd: str):
-    """Map raw user phrases to actions. Returns text or a small dict for web actions."""
-    if not raw_cmd:
-        return "Please say something."
-
-    cmd = raw_cmd.strip().lower()
-
-    # Save to session / history
-    memory.add(f"You: {raw_cmd}")
-    user_email = get_logged_in_email()
-    if user_email:
-        try:
-            save_chat_line(user_email, "user", raw_cmd)
-        except Exception:
-            pass
-
-    profile = get_user_profile(user_email) if user_email else memory.long
-
-    personality.update(cmd)
-
-    # Small-talk first
-    small = handle_small_talk(cmd)
-    if small is not None:
-        return small
-
-    # Pomodoro controls
-    def _pomodoro_payload():
-        status = pomodoro_mgr.get_status()
-        total = max(0, int(status.get("total_seconds") or 0))
-        remaining = max(0, int(status.get("remaining_seconds") or 0))
-        active = bool(status.get("active"))
-        mode = status.get("mode") or "pomodoro"
-        paused = bool(status.get("paused"))
-        progress = 0.0
-        if total > 0:
-            denom = float(total) if total else 1.0
-            progress = max(0.0, min(1.0, 1.0 - (remaining / denom))) if active else 0.0
-        return {
-            "mode": mode,
-            "total_seconds": total,
-            "remaining_seconds": remaining,
-            "progress": progress,
-            "active": active,
-            "paused": paused,
-        }
-
-    def _start_timer(seconds: int, mode: str, label: str):
-        pomodoro_mgr.start(seconds, mode)
-        minutes = max(1, seconds // 60)
-        msg = f"Starting {label} for {minutes} minutes."
-        speak(msg)
-        return {"text": msg, "pomodoro": _pomodoro_payload()}
-
-    if any(phrase in cmd for phrase in ("start pomodoro", "pomodoro start", "begin pomodoro", "start focus", "focus session", "focus mode")):
-        return _start_timer(25 * 60, "pomodoro", "a Pomodoro")
-
-    if any(phrase in cmd for phrase in ("start break", "short break", "break timer", "start rest")):
-        return _start_timer(5 * 60, "break", "a short break")
-
-    if any(phrase in cmd for phrase in ("start mini", "mini pomodoro", "quick pomodoro")):
-        return _start_timer(10 * 60, "mini", "a mini Pomodoro")
-
-    if "pause pomodoro" in cmd or "pause timer" in cmd:
-        pomodoro_mgr.pause()
-        msg = "Paused the Pomodoro timer."
-        speak(msg)
-        return {"text": msg, "pomodoro": _pomodoro_payload()}
-
-    if "resume pomodoro" in cmd or "resume timer" in cmd or "continue timer" in cmd:
-        pomodoro_mgr.resume()
-        msg = "Resumed the Pomodoro timer."
-        speak(msg)
-        return {"text": msg, "pomodoro": _pomodoro_payload()}
-
-    if "stop pomodoro" in cmd or "cancel pomodoro" in cmd or "stop timer" in cmd:
-        pomodoro_mgr.stop()
-        msg = "Stopped the Pomodoro timer."
-        speak(msg)
-        return {"text": msg, "pomodoro": _pomodoro_payload()}
-
-    if "reset pomodoro" in cmd or "restart pomodoro" in cmd:
-        pomodoro_mgr.reset()
-        msg = "Pomodoro timer reset to its last duration."
-        speak(msg)
-        return {"text": msg, "pomodoro": _pomodoro_payload()}
-
-    # Math and time/date
-    if "calculate" in cmd or "solve" in cmd:
-        speak("I solved it.")
-        return solve_math(cmd)
-    if ("time" in cmd and "what" in cmd) or cmd == "time":
-        india_tz = pytz.timezone("Asia/Kolkata")
-        now = datetime.datetime.now(india_tz)
-        t = now.strftime("%I:%M %p").lstrip("0")
-        speak(f"The time is {t}")
-        return f"The time is {t}"
-    if "date" in cmd:
-        d = datetime.date.today().strftime("%B %d, %Y")
-        speak(f"Today is {d}")
-        return f"Today is {d}"
-
-    # Open common websites
-    if "open youtube" in cmd:
-        if ON_SERVER:
-            return {"text": "Opening YouTube…", "action": "open_url", "url": "https://youtube.com"}
-        r = open_youtube()
-        speak(personality.respond(r))
-        return r
-    if "open instagram" in cmd:
-        if ON_SERVER:
-            return {"text": "Opening Instagram…", "action": "open_url", "url": "https://instagram.com"}
-        r = open_instagram()
-        speak(personality.respond(r))
-        return r
-    if "open linkedin" in cmd:
-        if ON_SERVER:
-            return {"text": "Opening LinkedIn…", "action": "open_url", "url": "https://linkedin.com"}
-        r = open_linkedin()
-        speak(personality.respond(r))
-        return r
-    if "open github" in cmd:
-        if ON_SERVER:
-            return {"text": "Opening GitHub…", "action": "open_url", "url": "https://github.com"}
-        r = open_github()
-        speak(personality.respond(r))
-        return r
-    if "open render" in cmd:
-        if ON_SERVER:
-            return {"text": "Opening Render…", "action": "open_url", "url": "https://render.com"}
-        r = open_render()
-        speak(personality.respond(r))
-        return r
-    if "open whatsapp" in cmd or "open whatsapp web" in cmd:
-        if ON_SERVER:
-            return {"text": "Opening WhatsApp Web…", "action": "open_url", "url": "https://web.whatsapp.com"}
-        r = open_whatsapp_web()
-        speak(personality.respond(r))
-        return r
-
-    # Weather / news via helpers
-    if "weather in" in cmd:
-        city_name = cmd.replace("weather in", "").strip()
-        weather_info = get_weather(city_name)
-        speak(weather_info)
-        return weather_info
-    if cmd.startswith("news on ") or cmd == "news":
-        topic_name = cmd.replace("news on", "", 1).strip() or "general"
-        news_info = get_news(topic_name)
-        speak(news_info)
-        return news_info
-
-    # Unit conversion
-    if "convert" in cmd or "km to miles" in cmd or "c to f" in cmd:
-        result = convert_unit(cmd)
-        speak(result)
-        return result
-
-    # WhatsApp send
-    if "whatsapp" in cmd and "send" in cmd:
-        parts = cmd.split()
-        phone = None
-        message = None
-        for p in parts:
-            if p.isdigit() and (9 <= len(p) <= 15):
-                phone = p
-                if "message" in parts:
-                    idx = parts.index("message") + 1
-                    message = " ".join(parts[idx:])
-                elif "msg" in parts:
-                    idx = parts.index("msg") + 1
-                    message = " ".join(parts[idx:])
-                elif "text" in parts:
-                    idx = parts.index("text") + 1
-                    message = " ".join(parts[idx:])
-                break
-        if phone and message:
-            sent, out = whatsapp_send_direct(phone, message)
-            if sent:
-                speak(out)
-                return out
-            r = send_whatsapp_message(phone, message)
-            speak(r)
-            return r
-        return "Please provide phone number and message. Example: send whatsapp to 919123456789 message Hello"
-
-    # Music
-    if cmd.startswith("play "):
-        rest = cmd[5:].strip()
-        name = None
-        if rest.startswith("music "):
-            name = rest[6:].strip()
-        elif rest.startswith("song "):
-            name = rest[5:].strip()
-        elif rest:
-            name = rest
-        r = play_music_from_library(name)
-        if isinstance(r, dict):
-            return r
-        speak(str(r))
-        return str(r)
-    if "pause music" in cmd or cmd == "pause":
-        if musicLibrary and hasattr(musicLibrary, "pause"):
-            musicLibrary.pause()
-            speak("Paused music.")
-            return "Paused music."
-        return "No music library pause function available."
-
-    # System commands
-    if "system status" in cmd or cmd == "status":
-        s = system_status_summary()
-        speak(s)
-        return s
-    if "sleep pc" in cmd or cmd == "sleep" or "put pc in sleep" in cmd:
-        ok, msg = sleep_pc()
-        speak(msg)
-        return msg
-    if "screenshot" in cmd:
-        try:
-            path = take_screenshot()
-            speak(f"Screenshot saved as {path}")
-            return f"Screenshot: {path}"
-        except Exception as e:
-            return f"Screenshot failed: {e}"
-    if "shutdown" in cmd:
-        speak("Shutting down the PC in 5 seconds. Cancel if you didn't mean this.")
-        if platform.system() == "Windows":
-            subprocess.run(["shutdown", "/s", "/t", "5"])
-        else:
-            subprocess.run(["shutdown", "now"])
-        return "Shutdown initiated."
-    if "restart" in cmd:
-        speak("Restarting now.")
-        if platform.system() == "Windows":
-            subprocess.run(["shutdown", "/r", "/t", "5"])
-        else:
-            subprocess.run(["reboot"])
-        return "Restart initiated."
-    if cmd == "lock" or "lock device" in cmd:
-        if platform.system() == "Windows":
-            subprocess.run(["rundll32.exe", "user32.dll,LockWorkStation"])
-            return "Locked PC."
-        return "Lock not available on this OS."
-
-    # Settings controls
-    if cmd.startswith("set brightness "):
-        try:
-            val = int(cmd.rsplit("set brightness ", 1)[1].strip().rstrip("%"))
-            val = max(0, min(100, val))
-            ok, msg = set_brightness(val)
-            speak(msg)
-            return msg
-        except Exception:
-            return "Please specify brightness as a number 0-100."
-    if "turn wifi on" in cmd or "wifi on" in cmd:
-        ok, msg = toggle_wifi(True)
-        speak(msg)
-        return msg
-    if "turn wifi off" in cmd or "wifi off" in cmd:
-        ok, msg = toggle_wifi(False)
-        speak(msg)
-        return msg
-
-    # Generate PPT/DOC/PDF/notes from a topic (research helpers)
-    if cmd.startswith("generate ppt on ") or cmd.startswith("create ppt on "):
-        topic = cmd.replace("generate ppt on ", "", 1).replace("create ppt on ", "", 1).strip()
-        if not topic:
-            return "Please provide a topic for the PPT."
-        # reuse web research
-        points, _ = research_query_to_texts_with_sources(topic, limit=8)
-        try:
-            path = _generate_pptx(f"{topic.title()} - Slides", points)
-            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
-            url = f"/download/{rel}"
-            speak("Your slides are ready, I've created a download link.")
-            return {"text": f"Generated slides for {topic}. Download: {url}", "action": "open_url", "url": url}
-        except Exception as e:
-            return f"Could not generate PPT: {e}"
-
-    if cmd.startswith("generate doc on ") or cmd.startswith("create doc on "):
-        topic = cmd.replace("generate doc on ", "", 1).replace("create doc on ", "", 1).strip()
-        if not topic:
-            return "Please provide a topic for the document."
-        points = research_query_to_texts(topic, limit=10)
-        try:
-            path = _generate_docx(f"{topic.title()} - Notes", points)
-            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
-            url = f"/download/{rel}"
-            speak("Your document is ready, I've created a download link.")
-            return {"text": f"Generated DOCX for {topic}. Download: {url}", "action": "open_url", "url": url}
-        except Exception as e:
-            return f"Could not generate DOCX: {e}"
-
-    if cmd.startswith("generate pdf on ") or cmd.startswith("create pdf on "):
-        topic = cmd.replace("generate pdf on ", "", 1).replace("create pdf on ", "", 1).strip()
-        if not topic:
-            return "Please provide a topic for the PDF."
-        points, sources = research_query_to_texts_with_sources(topic, limit=12)
-        try:
-            path = _generate_pdf(f"{topic.title()} - Report", points, sources=sources)
-            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
-            url = f"/download/{rel}"
-            speak("Your PDF report is ready, I've created a download link.")
-            return {"text": f"Generated PDF for {topic}. Download: {url}", "action": "open_url", "url": url}
-        except Exception as e:
-            return f"Could not generate PDF: {e}"
-
-    if cmd.startswith("generate notes on ") or cmd.startswith("create notes on "):
-        topic = cmd.replace("generate notes on ", "", 1).replace("create notes on ", "", 1).strip()
-        if not topic:
-            return "Please provide a topic for the notes."
-        points, sources = research_query_to_texts_with_sources(topic, limit=10)
-        try:
-            lines = list(points)
-            if sources:
-                lines.append("")
-                lines.append("Sources:")
-                for s in sources:
-                    lines.append(s)
-            path = _generate_docx(f"{topic.title()} - Study Notes", lines)
-            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
-            url = f"/download/{rel}"
-            speak("Your study notes are ready, I've created a download link.")
-            return {"text": f"Generated notes for {topic}. Download: {url}", "action": "open_url", "url": url}
-        except Exception as e:
-            return f"Could not generate notes: {e}"
-
-    # Notes / reminders / study helpers
-    if cmd.startswith("take note") or cmd.startswith("note "):
-        note_text = cmd.replace("take note", "").replace("note", "").strip()
-        if not note_text:
-            return "Please say the note text."
-        nid = notes_mgr.add(note_text)
-        r = f"Note saved. ID {nid}"
-        speak(r)
-        return r
-
-    if "list notes" in cmd or "show notes" in cmd:
-        n = notes_mgr.list()
-        if not n:
-            return "No notes."
-        short = "; ".join([f"{i+1}. {x['text']}" for i, x in enumerate(n[:6])])
-        speak("Reading notes.")
-        return short
-
-    if "set reminder" in cmd or "remind me" in cmd:
-        if " at " in cmd:
-            try:
-                before, atpart = cmd.rsplit(" at ", 1)
-                text = before.replace("remind me to", "").replace("set reminder to", "").strip()
-                now = datetime.datetime.now()
-                if ":" in atpart and len(atpart.split()) == 1:
-                    hour, minute = map(int, atpart.split(":"))
-                    when = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-                    if when < now:
-                        when += datetime.timedelta(days=1)
-                else:
-                    when = datetime.datetime.fromisoformat(atpart.strip())
-                rid = reminder_mgr.add(text, when)
-                r = f"Reminder set for {when.isoformat()}"
-                speak(r)
-                return r
-            except Exception as e:
-                return f"Couldn't set reminder: {e}"
-        return "Please include time with 'at'. Example: remind me to call mom at 19:30"
-
-    # Summarize recent chat (study helper)
-    if "summarize this chat" in cmd or "chat summary" in cmd:
-        sess = memory.get_session()[-40:]
-        if not sess:
+# Summarize recent chat (study helper)
+if "summarize this chat" in cmd or "chat summary" in cmd:
+    sess = memory.get_session()[-40:]
+    if not sess:
+        return "There isn't enough recent chat to summarize yet."
+    text_blob = "\n".join(x.get("text", "") for x in sess if x.get("text"))
+    summary = _summarize_text(text_blob, max_len=800)
+    add_xp("study", 10)
+    return "Here is a short summary of our recent chat:\n" + summary
             return "There isn't enough recent chat to summarize yet."
         text_blob = "\n".join(x.get("text", "") for x in sess if x.get("text"))
         summary = _summarize_text(text_blob, max_len=800)

@@ -635,11 +635,30 @@
       return `${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}`;
     }
 
+    function updateTimerText(minutes, seconds) {
+      if (!pomodoroTimeEl) return;
+      const m = Math.max(0, minutes | 0);
+      const s = Math.max(0, seconds | 0);
+      pomodoroTimeEl.innerText = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    }
+
+    function updateCupFill(totalSeconds, remainingSeconds) {
+      if (!coffeeFillEl) return;
+      const total = Math.max(0, Number(totalSeconds) || 0);
+      const remaining = Math.max(0, Number(remainingSeconds) || 0);
+      if (total <= 0) {
+        coffeeFillEl.style.height = "0%";
+        return;
+      }
+      const ratio = Math.max(0, Math.min(1, remaining / total));
+      coffeeFillEl.style.height = `${(ratio * 100).toFixed(1)}%`;
+    }
+
     function setPomodoroActive(on) {
       pomodoroWidget.classList.toggle("is-running", !!on);
       if (!on) {
         pomodoroModeEl.innerText = "IDLE";
-        pomodoroTimeEl.innerText = "--:--";
+        updateTimerText(0, 0);
         pomodoroEtaEl.innerText = "";
         pomodoroBarEl.style.width = "0%";
         coffeeFillEl.style.height = "0%";
@@ -658,10 +677,10 @@
       const fillHeight = `${(ratio * 100).toFixed(1)}%`;
 
       const palette = MODE_COLORS[mode] || MODE_COLORS["pomodoro"];
-      coffeeFillEl.style.height = fillHeight;
       coffeeFillEl.style.background = `linear-gradient(180deg, rgba(255,255,255,0.15), ${palette.fill})`;
       pomodoroModeEl.innerText = (mode || "pomodoro").toUpperCase();
-      pomodoroTimeEl.innerText = formatMMSS(remaining);
+      updateTimerText(Math.floor((remaining || 0) / 60), (remaining || 0) % 60);
+      updateCupFill(total, remaining);
       pomodoroEtaEl.innerText = remaining > 0 ? `~${Math.ceil(remaining / 60)} min left` : "Done";
       pomodoroBarEl.style.width = pct;
     }
