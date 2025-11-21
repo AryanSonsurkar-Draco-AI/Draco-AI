@@ -595,6 +595,26 @@
       return String(m).padStart(2,'0') + ':' + String(r).padStart(2,'0');
     }
 
+    function updateTimerText(payload){
+      if (!pomodoroClock) return;
+      const remaining = payload && typeof payload.remaining_seconds === 'number'
+        ? Math.max(0, payload.remaining_seconds)
+        : 0;
+      pomodoroClock.textContent = formatSeconds(remaining);
+    }
+
+    function updateCupFill(payload){
+      if (!coffeeFill) return;
+      const total = payload && typeof payload.total_seconds === 'number' ? Math.max(0, payload.total_seconds) : 0;
+      const remaining = payload && typeof payload.remaining_seconds === 'number' ? Math.max(0, payload.remaining_seconds) : 0;
+      if (total <= 0){
+        coffeeFill.style.height = '0%';
+        return;
+      }
+      const ratio = Math.max(0, Math.min(1, remaining / total));
+      coffeeFill.style.height = (ratio * 100).toFixed(1) + '%';
+    }
+
     function updatePomodoroUI(payload){
       if (!pomodoroWidget || !coffeeFill || !pomodoroClock || !pomodoroLabel) return;
       const totalRaw = payload && typeof payload.total_seconds === 'number' ? payload.total_seconds : 0;
@@ -607,14 +627,8 @@
         : (total > 0 ? 1 - (remaining / total) : 0);
 
       pomodoroWidget.style.display = 'flex';
-      if (total > 0) {
-        pomodoroClock.textContent = formatSeconds(remaining || total);
-        const percent = Math.max(0, Math.min(100, (1 - progress) * 100));
-        coffeeFill.style.height = percent + '%';
-      } else {
-        pomodoroClock.textContent = '00:00';
-        coffeeFill.style.height = '0%';
-      }
+      updateTimerText({ remaining_seconds: remaining || total });
+      updateCupFill({ total_seconds: total, remaining_seconds: remaining });
 
       if (mode === 'break') pomodoroLabel.textContent = total > 0 ? 'Break time' : 'Break queued';
       else if (mode === 'mini') pomodoroLabel.textContent = total > 0 ? 'Mini Pomodoro' : 'Mini idle';

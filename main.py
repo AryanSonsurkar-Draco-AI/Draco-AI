@@ -436,7 +436,7 @@ if pyttsx3 and not ON_SERVER:
 
 def emit_to_ui(key: str, payload: dict):
     try:
-        socketio.emit(key, payload)
+        socketio.emit(key, payload, namespace="/", broadcast=True)
     except Exception as e:
         print("Emit error:", e)
 
