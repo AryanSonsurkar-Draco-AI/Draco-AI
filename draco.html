@@ -19,116 +19,6 @@
       --line: #2b2753;
     }
 
-    function clearSearchResults(){
-      if (searchResultsList) searchResultsList.innerHTML = '';
-      if (searchQueryLabel) searchQueryLabel.textContent = '';
-      if (searchPanel) searchPanel.classList.add('hidden');
-    }
-
-    function hostnameFromUrl(urlString){
-      try {
-        const u = new URL(urlString);
-        return u.hostname.replace('www.', '');
-      } catch (e) {
-        return urlString || '';
-      }
-    }
-
-    function renderSearchResults(payload){
-      if (!searchPanel || !searchResultsList) return;
-      const results = Array.isArray(payload && payload.results) ? payload.results : [];
-      if (searchQueryLabel) {
-        const q = (payload && payload.query) ? `“${payload.query}”` : 'Recent lookup';
-        searchQueryLabel.textContent = q;
-      }
-      searchResultsList.innerHTML = '';
-      if (!results.length) {
-        const empty = document.createElement('div');
-        empty.className = 'search-empty';
-        empty.textContent = 'No web results yet.';
-        searchResultsList.appendChild(empty);
-      } else {
-        results.forEach((r) => {
-          const row = document.createElement('div');
-          row.className = 'search-row';
-          const title = document.createElement('a');
-          title.href = r.href || '#';
-          title.target = '_blank';
-          title.rel = 'noopener noreferrer';
-          title.textContent = r.title || 'Result';
-          const snippet = document.createElement('div');
-          snippet.className = 'search-snippet';
-          snippet.textContent = r.snippet || 'No description available.';
-          const meta = document.createElement('div');
-          meta.className = 'search-meta';
-          meta.textContent = hostnameFromUrl(r.href || '');
-          row.appendChild(title);
-          row.appendChild(snippet);
-          row.appendChild(meta);
-          searchResultsList.appendChild(row);
-        });
-      }
-      searchPanel.classList.remove('hidden');
-    }
-
-    if (clearSearchBtn) {
-      clearSearchBtn.onclick = () => clearSearchResults();
-    }
-
-    function normalizeBossSegments(payload){
-      if (Array.isArray(payload && payload.segments)) {
-        return payload.segments;
-      }
-      const text = (payload && payload.text) ? String(payload.text).trim() : '';
-      if (!text) return [];
-      return text.split(/\n{2,}/).map((chunk) => ({ title: null, body: chunk.trim() }));
-    }
-
-    function renderBossLevelMessage(payload){
-      const card = document.createElement('div');
-      card.className = 'boss-level-card';
-      if (payload && payload.theme === 'glitch') {
-        card.classList.add('boss-glitch');
-      }
-      const title = payload && payload.title ? payload.title : 'Boss Level';
-      const titleEl = document.createElement('div');
-      titleEl.className = 'boss-level-title';
-      titleEl.textContent = title;
-      card.appendChild(titleEl);
-      const segments = normalizeBossSegments(payload);
-      segments.forEach((seg, idx) => {
-        const block = document.createElement('div');
-        block.className = 'boss-block';
-        const heading = document.createElement('div');
-        heading.className = 'boss-block-title';
-        heading.textContent = seg && seg.title ? seg.title : `Phase ${idx + 1}`;
-        const body = document.createElement('div');
-        body.className = 'boss-block-body';
-        body.textContent = seg && seg.body ? seg.body : '';
-        block.appendChild(heading);
-        block.appendChild(body);
-        card.appendChild(block);
-      });
-      appendItem(card, 'bot');
-    }
-
-    function handleNewMessage(payload){
-      if (!payload) return;
-      const kind = (payload.kind || '').toLowerCase();
-      if (kind === 'search') {
-        const msg = payload.text || `Search ready for ${payload.query || 'your query.'}`;
-        appendItem(msg, payload.role === 'user' ? 'user' : 'bot');
-        return;
-      }
-      if (kind === 'boss_level') {
-        renderBossLevelMessage(payload);
-        return;
-      }
-      if (payload.text) {
-        appendItem(payload.text, payload.role === 'user' ? 'user' : 'bot');
-      }
-    }
-
     * { box-sizing: border-box; }
     html, body { overflow-x: hidden; }
     body { font-family: 'Poppins', 'Inter', system-ui, Arial, sans-serif; margin: 0; color: var(--text);
@@ -727,6 +617,116 @@
     if (copyErrorBtn) copyErrorBtn.onclick = async ()=>{ try{ await navigator.clipboard.writeText(errorText.textContent||''); }catch(e){} };
     if (retryBtn) retryBtn.onclick = ()=>{ hideError(); if (lastAction) lastAction(); };
 
+    function clearSearchResults(){
+      if (searchResultsList) searchResultsList.innerHTML = '';
+      if (searchQueryLabel) searchQueryLabel.textContent = '';
+      if (searchPanel) searchPanel.classList.add('hidden');
+    }
+
+    function hostnameFromUrl(urlString){
+      try {
+        const u = new URL(urlString);
+        return u.hostname.replace('www.', '');
+      } catch (e) {
+        return urlString || '';
+      }
+    }
+
+    function renderSearchResults(payload){
+      if (!searchPanel || !searchResultsList) return;
+      const results = Array.isArray(payload && payload.results) ? payload.results : [];
+      if (searchQueryLabel) {
+        const q = (payload && payload.query) ? `“${payload.query}”` : 'Recent lookup';
+        searchQueryLabel.textContent = q;
+      }
+      searchResultsList.innerHTML = '';
+      if (!results.length) {
+        const empty = document.createElement('div');
+        empty.className = 'search-empty';
+        empty.textContent = 'No web results yet.';
+        searchResultsList.appendChild(empty);
+      } else {
+        results.forEach((r) => {
+          const row = document.createElement('div');
+          row.className = 'search-row';
+          const title = document.createElement('a');
+          title.href = r.href || '#';
+          title.target = '_blank';
+          title.rel = 'noopener noreferrer';
+          title.textContent = r.title || 'Result';
+          const snippet = document.createElement('div');
+          snippet.className = 'search-snippet';
+          snippet.textContent = r.snippet || 'No description available.';
+          const meta = document.createElement('div');
+          meta.className = 'search-meta';
+          meta.textContent = hostnameFromUrl(r.href || '');
+          row.appendChild(title);
+          row.appendChild(snippet);
+          row.appendChild(meta);
+          searchResultsList.appendChild(row);
+        });
+      }
+      searchPanel.classList.remove('hidden');
+    }
+
+    function normalizeBossSegments(payload){
+      if (Array.isArray(payload && payload.segments)) {
+        return payload.segments;
+      }
+      const text = (payload && payload.text) ? String(payload.text).trim() : '';
+      if (!text) return [];
+      return text.split(/\n{2,}/).map((chunk) => ({ title: null, body: chunk.trim() }));
+    }
+
+    function renderBossLevelMessage(payload){
+      const card = document.createElement('div');
+      card.className = 'boss-level-card';
+      if (payload && payload.theme === 'glitch') {
+        card.classList.add('boss-glitch');
+      }
+      const title = payload && payload.title ? payload.title : 'Boss Level';
+      const titleEl = document.createElement('div');
+      titleEl.className = 'boss-level-title';
+      titleEl.textContent = title;
+      card.appendChild(titleEl);
+      const segments = normalizeBossSegments(payload);
+      segments.forEach((seg, idx) => {
+        const block = document.createElement('div');
+        block.className = 'boss-block';
+        const heading = document.createElement('div');
+        heading.className = 'boss-block-title';
+        heading.textContent = seg && seg.title ? seg.title : `Phase ${idx + 1}`;
+        const body = document.createElement('div');
+        body.className = 'boss-block-body';
+        body.textContent = seg && seg.body ? seg.body : '';
+        block.appendChild(heading);
+        block.appendChild(body);
+        card.appendChild(block);
+      });
+      appendItem(card, 'bot');
+    }
+
+    function handleNewMessage(payload){
+      if (!payload) return;
+      const kind = (payload.kind || '').toLowerCase();
+      if (kind === 'search') {
+        const msg = payload.text || `Search ready for ${payload.query || 'your query.'}`;
+        appendItem(msg, payload.role === 'user' ? 'user' : 'bot');
+        return;
+      }
+      if (kind === 'boss_level') {
+        renderBossLevelMessage(payload);
+        return;
+      }
+      if (payload.text) {
+        appendItem(payload.text, payload.role === 'user' ? 'user' : 'bot');
+      }
+    }
+
+    if (clearSearchBtn) {
+      clearSearchBtn.onclick = () => clearSearchResults();
+    }
+
     // Busy state helpers
     const allButtons = ()=> Array.from(document.querySelectorAll('button.btn'));
     function setBusy(on){ allButtons().forEach(b=> b.disabled = !!on); }
@@ -1287,6 +1287,7 @@
           appendItem('Sources: ' + list, 'bot');
         }
         refreshGamestate();
+        setBusy(false);
         showTyping(false);
       });
 
