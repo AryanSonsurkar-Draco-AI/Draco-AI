@@ -18,7 +18,6 @@
       --muted: #a7a2c7;
       --line: #2b2753;
     }
-
     * { box-sizing: border-box; }
     html, body { overflow-x: hidden; }
     body { font-family: 'Poppins', 'Inter', system-ui, Arial, sans-serif; margin: 0; color: var(--text);
@@ -48,15 +47,7 @@
     .chip { padding:8px 12px; border-radius: 999px; border:1px solid var(--line); color:#c8d0df; background: #0f1218; cursor:pointer; }
     .chip:hover { background:#121623; }
     .log { margin-top: 8px; padding-right: 4px; padding-bottom: 8px; display:flex; flex-direction:column; gap:8px; }
-    .chat-row { display:flex; align-items:flex-end; gap:8px; }
-    .chat-row-bot { justify-content:flex-start; }
-    .chat-row-user { justify-content:flex-end; }
-    .msg-avatar { width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.8rem; font-weight:700; flex-shrink:0; box-shadow:0 0 10px rgba(0,0,0,.35); }
-    .bot-msg-avatar { background:#020617; color:#e5e7eb; }
-    .user-msg-avatar { background:#f97316; color:#111827; }
-    body.light-mode .bot-msg-avatar { background:#b30000; color:#fff5f5; }
-    body.light-mode .user-msg-avatar { background:#ffd24d; color:#7f1d1d; }
-    .item { border-radius: 16px; padding:10px 14px; margin:0; max-width: 72%; line-height:1.5; display:inline-block; font-size:0.95rem; position:relative; }
+    .item { border-radius: 16px; padding:10px 14px; margin:0; max-width: 72%; line-height:1.5; display:inline-block; font-size:0.95rem; }
     /* Bot replies: darker than user for contrast */
     body.light-mode .item.bot-item {
       align-self:flex-start;
@@ -88,15 +79,8 @@
     .user { font-weight:500; }
     .bot { font-weight:500; }
     small { color:var(--muted); }
-    .msg-tools { display:flex; gap:6px; margin-top:4px; justify-content:flex-end; font-size:0.78rem; }
-    .msg-tools .edit-btn { background:transparent; border:none; color:var(--muted); cursor:pointer; padding:0; }
-    .msg-tools .edit-btn:hover { color:var(--accent-2); }
-    .reactions { display:flex; gap:6px; margin-top:4px; font-size:0.78rem; align-items:center; }
-    .reactions .react-btn { background:transparent; border:1px solid rgba(148,163,184,.6); border-radius:999px; padding:3px 8px; cursor:pointer; color:var(--muted); }
-    .reactions .react-btn.reacted { background:rgba(34,197,94,.12); border-color:rgba(34,197,94,.7); color:#22c55e; }
-    body.light-mode .reactions .react-btn { border-color:rgba(255,180,120,.7); }
     /* layout: sidebar + main */
-    .layout { display:grid; grid-template-columns: 280px minmax(0,1fr); gap:20px; align-items:stretch; }
+    .layout { flex:1; display:grid; grid-template-columns: 280px minmax(0, 1fr); gap:14px; min-height:0; }
     .side { background: var(--card); border:1px solid var(--line); border-radius:16px; padding:14px; overflow:auto; display:flex; flex-direction:column; gap:12px; }
     .profile { display:flex; flex-direction:column; align-items:center; gap:8px; padding:14px 8px 8px; border-bottom:1px solid rgba(111,141,255,.18); }
     .avatar { width:64px; height:64px; border-radius:50%; display:grid; place-items:center; color:#fff; border:1px solid var(--line); overflow:hidden; flex-shrink:0; margin-bottom:20px; position:relative; transition: transform .3s ease-in-out; }
@@ -118,9 +102,37 @@
     .hitem { padding:8px 10px; border-radius:10px; border:1px solid var(--line); margin:8px 0; color:#d9d3ff; background:#151236; cursor:pointer; }
     .hitem:hover { background:#1b1746; }
     .sideActions { display:flex; gap:8px; margin-top:10px; }
-    .toggleBar { text-align:right; margin-bottom:8px; display:none; }
+    .toggleBar { margin-bottom:8px; display:none; align-items:center; justify-content:space-between; gap:8px; }
+    .toggleBar-actions { display:flex; gap:8px; }
+    .hamburger-btn { display:none; align-items:center; gap:8px; padding:10px 12px; border-radius:12px; min-height:44px; font-weight:600; font-size:0.9rem; }
+    .hamburger-icon { position:relative; width:20px; height:2px; border-radius:2px; background:currentColor; transition: background .3s ease; }
+    .hamburger-icon::before,
+    .hamburger-icon::after { content:""; position:absolute; left:0; width:20px; height:2px; border-radius:2px; background:currentColor; transition: transform .3s ease, opacity .3s ease; }
+    .hamburger-icon::before { top:-6px; }
+    .hamburger-icon::after { top:6px; }
+    .hamburger-btn.active .hamburger-icon { background:transparent; }
+    .hamburger-btn.active .hamburger-icon::before { transform: translateY(6px) rotate(45deg); }
+    .hamburger-btn.active .hamburger-icon::after { transform: translateY(-6px) rotate(-45deg); }
     .layout.collapsed { grid-template-columns: 0 minmax(0,1fr); }
     .layout.expanded { grid-template-columns: 360px minmax(0,1fr); }
+
+    /* Mobile: hide sidebar, show only chat area */
+    .mobile-overlay { display:none; position:fixed; inset:0; background:rgba(7,7,14,0.55); z-index:40; }
+    .mobile-overlay.visible { display:block; }
+    body.mobile-sidebar-open { overflow:hidden; }
+
+    @media (max-width: 768px) {
+      .wrap { padding: 8px 10px 14px; }
+      .toggleBar { display:flex; }
+      .toggleBar-actions { width:100%; justify-content:flex-end; display:flex; gap:8px; }
+      #toggleSide,
+      #expandSide { display:none; }
+      .hamburger-btn { display:inline-flex; }
+      .layout { position:relative; grid-template-columns: minmax(0,1fr); }
+      .side { display:none !important; }
+      .layout.mobile-open { overflow:hidden; }
+      .layout.mobile-open .side { display:block !important; position:fixed; top:0; left:0; height:100vh; width:min(320px, 85vw); max-width:320px; z-index:60; overflow-y:auto; box-shadow:0 16px 40px rgba(0,0,0,0.6); }
+    }
 
     /* THEME OVERRIDES AND ENHANCEMENTS */
     :root { --transition: 0.6s ease-in-out; }
@@ -180,31 +192,6 @@
     .dropzone.dragover { background: rgba(255, 170, 0, 0.08); border-color: var(--accent-2); }
     .progress { width:100%; height:8px; background: rgba(255,255,255,.15); border-radius:6px; overflow:hidden; margin-top:8px; }
     .progress > span { display:block; height:100%; width:0%; background: var(--accent-2); transition: width .15s linear; }
-    .search-panel { margin-top:14px; border:1px solid var(--line); border-radius:14px; background:rgba(10,8,26,0.75); padding:12px; display:flex; flex-direction:column; gap:10px; box-shadow:0 8px 18px rgba(0,0,0,.25); }
-    body.light-mode .search-panel { background: rgba(255,255,255,0.75); }
-    .search-panel.hidden { display:none; }
-    .search-header { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-    .search-title { font-weight:600; font-size:0.95rem; }
-    .search-query-label { font-size:0.85rem; color:var(--muted); }
-    .search-results-list { display:flex; flex-direction:column; gap:10px; }
-    .search-row { padding:10px 12px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); }
-    body.light-mode .search-row { background:rgba(255,255,255,0.5); border-color:rgba(255,120,60,0.25); }
-    .search-row a { color:#7dd3fc; font-weight:600; text-decoration:none; }
-    body.light-mode .search-row a { color:#b30000; }
-    .search-snippet { margin-top:4px; font-size:0.9rem; line-height:1.4; color:var(--text); }
-    .search-meta { margin-top:6px; font-size:0.8rem; color:var(--muted); display:flex; gap:6px; align-items:center; }
-    .search-empty { font-size:0.9rem; color:var(--muted); padding:6px 4px; }
-    .btn.mini { padding:6px 10px; font-size:0.8rem; border-radius:12px; text-transform:none; }
-    .boss-level-card { border:1px solid rgba(124,77,255,0.4); border-radius:16px; padding:14px; background:linear-gradient(135deg, rgba(37,20,79,0.9), rgba(20,10,40,0.85)); box-shadow:0 12px 28px rgba(0,0,0,0.35); margin-top:6px; }
-    body.light-mode .boss-level-card { background:linear-gradient(135deg, rgba(255,170,80,0.95), rgba(255,120,60,0.85)); border-color:rgba(255,120,60,0.45); color:#3c0a0a; }
-    .boss-level-title { font-size:1.1rem; font-weight:700; letter-spacing:0.4px; margin-bottom:6px; display:flex; align-items:center; gap:8px; }
-    .boss-level-title span { font-size:0.8rem; text-transform:uppercase; letter-spacing:1px; color:var(--muted); }
-    .boss-block { border-radius:12px; padding:10px 12px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.05); margin-top:8px; }
-    body.light-mode .boss-block { background:rgba(255,255,255,0.55); border-color:rgba(255,120,60,0.25); }
-    .boss-block-title { font-weight:600; font-size:0.95rem; margin-bottom:4px; display:flex; align-items:center; gap:6px; }
-    .boss-block-body { font-size:0.9rem; line-height:1.5; }
-    .boss-glitch { animation: glitchPulse 1.4s infinite; }
-    @keyframes glitchPulse { 0% { text-shadow:0 0 6px rgba(124,77,255,0.9);} 50% { text-shadow:0 0 14px rgba(124,77,255,0.6);} 100% { text-shadow:0 0 6px rgba(124,77,255,0.9);} }
     /* Animations */
     .fade-in { animation: fadeIn .28s ease-out both; }
     .slide-up { animation: slideUp .28s ease-out both; }
@@ -228,21 +215,8 @@
     body.light-mode .chat-hero-title { color:#ff0000; }
     .chat-hero-sub { font-size:1rem; }
 
-    /* Typing indicator */
-    .typing-indicator { margin-top:4px; display:none; align-items:center; gap:6px; color:var(--muted); font-size:0.9rem; }
-    .typing-indicator-text { opacity:0.9; }
-    .typing-dots { display:flex; gap:3px; }
-    .typing-dot { width:6px; height:6px; border-radius:50%; background:var(--muted); opacity:0.3; animation: typingBlink 1s infinite ease-in-out; }
-    .typing-dot:nth-child(2) { animation-delay:0.15s; }
-    .typing-dot:nth-child(3) { animation-delay:0.3s; }
-    @keyframes typingBlink {
-      0%,100% { opacity:0.2; transform:translateY(0); }
-      50% { opacity:1; transform:translateY(-2px); }
-    }
-
     /* Sidebar glass */
     .side { background: var(--card); backdrop-filter: blur(12px); box-shadow: 0 0 24px rgba(0,0,0,.25), inset 0 0 0 1px var(--line); }
-    .side-close-btn { display:none; }
 
     /* Chat panel glow */
     .card { box-shadow: 0 0 0 1px var(--line), 0 0 28px rgba(0,0,0,.25); }
@@ -251,59 +225,6 @@
     .btn { position: relative; border-radius: 15px; padding: 12px 20px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; border: 1px solid transparent; transition: background var(--transition), box-shadow var(--transition), transform .2s ease; }
     body.light-mode .btn { background: #b30000; border-color: rgba(255,120,60,.35); box-shadow: 0 0 12px rgba(255, 120, 60, .25); }
     body.dark-mode .btn { background: #2200aa; border-color: rgba(120,100,255,.35); box-shadow: 0 0 12px rgba(120, 100, 255, .25); }
-
-    /* Mobile: chat full width, sidebar as slide-in overlay */
-    .mobile-menu-btn { display:none; }
-
-    @media (max-width: 768px) {
-      .layout { grid-template-columns: minmax(0,1fr); }
-      .side {
-        position:fixed;
-        top:0;
-        bottom:0;
-        left:0;
-        width:78%;
-        max-width:320px;
-        z-index:80;
-        transform: translateX(-100%);
-        transition: transform .25s ease;
-      }
-      body.mobile-side-open .side { transform: translateX(0); }
-
-      .side-overlay {
-        display:none;
-        position:fixed;
-        inset:0;
-        background:rgba(0,0,0,.45);
-        backdrop-filter: blur(2px);
-        z-index:75;
-      }
-      body.mobile-side-open .side-overlay { display:block; }
-
-      .mobile-menu-btn {
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        position:fixed;
-        top:10px;
-        left:10px;
-        z-index:90;
-        padding:8px 10px;
-        border-radius:999px;
-        font-size:18px;
-      }
-
-      .side-close-btn {
-        display:flex;
-        align-items:center;
-        justify-content:center;
-        margin-bottom:8px;
-        align-self:flex-end;
-        padding:6px 10px;
-        font-size:14px;
-        border-radius:999px;
-      }
-    }
     .btn:hover { transform: scale(1.05); }
     body.light-mode .btn:hover { box-shadow: 0 0 22px rgba(255, 160, 60, .55); }
     body.dark-mode .btn:hover { box-shadow: 0 0 22px rgba(120, 100, 255, .55); }
@@ -396,20 +317,21 @@
 </head>
 <body>
   <div class="flames" aria-hidden="true"></div>
-  <!-- Mobile sidebar toggle button -->
-  <button class="btn mobile-menu-btn" id="mobileMenuBtn" aria-label="Open sidebar">☰</button>
-  <!-- Mobile sidebar backdrop -->
-  <div class="side-overlay" id="sideOverlay"></div>
   <div class="wrap">
     <h1 style="display:none;">Draco AI</h1>
     <div class="status" style="display:none;"><span class="dot" id="dot"></span><span id="statusText">Connecting…</span></div>
     <div class="toggleBar">
-      <button class="btn" id="toggleSide">Hide Sidebar</button>
-      <button class="btn" id="expandSide">Expand</button>
+      <button class="btn hamburger-btn" id="mobileMenuBtn" aria-expanded="false" aria-controls="sidebar">
+        <span class="hamburger-icon" aria-hidden="true"></span>
+        <span class="hamburger-label">Menu</span>
+      </button>
+      <div class="toggleBar-actions">
+        <button class="btn" id="toggleSide">Hide Sidebar</button>
+        <button class="btn" id="expandSide">Expand</button>
+      </div>
     </div>
     <div class="layout" id="layout">
       <div class="side" id="sidebar">
-        <button class="btn side-close-btn" id="sideCloseBtn" aria-label="Close sidebar">✕</button>
         <div class="profile">
           <div class="avatar" id="avatar" style="width:72px; height:72px;">
             <img id="dracoLogo" src="/static/Draco%20AI%20logo.jpg" alt="Draco Logo" onerror="this.style.display='none'; this.nextElementSibling.style.display='grid';" />
@@ -418,6 +340,17 @@
           <div class="meta" style="text-align:center;">
             <div id="profName">Draco AI</div>
             <small id="profEmail">Powered by Aryan and his co-workers</small>
+          </div>
+        </div>
+        <div class="card" style="margin-top:10px; padding:12px;">
+          <div style="font-weight:600; font-size:13px; margin-bottom:6px;">Account</div>
+          <div id="authStatus" style="font-size:12px; color:var(--muted); margin-bottom:6px;">Guest – chats not saved</div>
+          <div class="input" style="margin-bottom:8px; padding:8px 10px;">
+            <input id="loginEmail" type="text" placeholder="Enter email to sign in" style="font-size:13px;" />
+          </div>
+          <div class="row" style="gap:8px;">
+            <button class="btn" id="loginBtn" style="flex:1; padding:8px 10px; font-size:12px;">Login / Sign up</button>
+            <button class="btn" id="logoutBtn" style="flex:1; padding:8px 10px; font-size:12px; display:none;">Logout</button>
           </div>
         </div>
         <div class="sideActions">
@@ -435,27 +368,6 @@
         </div>
         <!-- Quick Actions moved to bottom sheet -->
         <div class="history" id="history"></div>
-
-        <!-- Gamification progress card -->
-        <div class="card" id="progressCard" style="margin-top:10px;">
-          <div style="font-weight:600; margin-bottom:6px; text-align:center;">Progress</div>
-          <div style="font-size:13px; display:flex; justify-content:space-between; margin-bottom:4px;">
-            <span>Level <span id="levelValue">1</span></span>
-            <span style="color:var(--muted); font-size:12px;">
-              <span id="xpValue">0</span>/<span id="xpNeeded">50</span> XP
-            </span>
-          </div>
-          <div style="width:100%; height:7px; border-radius:999px; background:rgba(255,255,255,0.12); overflow:hidden; margin-bottom:8px;">
-            <div id="xpBar" style="height:100%; width:0%; border-radius:999px; background:var(--accent-2); transition:width 0.2s ease-out;"></div>
-          </div>
-          <div style="font-size:12px; margin-bottom:4px;">Mode</div>
-          <div id="modeChips" style="display:flex; gap:6px; flex-wrap:wrap;">
-            <button type="button" class="chip" data-mode="study">Study</button>
-            <button type="button" class="chip" data-mode="coding">Coding</button>
-            <button type="button" class="chip" data-mode="balanced">Balanced</button>
-          </div>
-        </div>
-
         <div class="card" id="memoryCard" style="margin-top:10px;">
           <div style="font-weight:600; margin-bottom:10px; text-align:center;">Your Profile</div>
           <div id="memInfo" style="font-size:14px; color:var(--text);"></div>
@@ -478,14 +390,6 @@
           <div class="chat-hero-sub">Ask anything to get started.</div>
         </div>
         <div class="log" id="log"></div>
-        <div id="typingIndicator" class="typing-indicator">
-          <span class="typing-indicator-text">Draco is thinking</span>
-          <div class="typing-dots">
-            <span class="typing-dot"></span>
-            <span class="typing-dot"></span>
-            <span class="typing-dot"></span>
-          </div>
-        </div>
         <div class="input" style="margin-top:12px;">
           <input id="input" type="text" placeholder="Type a command (e.g., open youtube, play music, take note ...)" />
           <button class="btn" id="quickActionsBtn" style="white-space:nowrap;" title="Quick Actions">+</button>
@@ -518,28 +422,7 @@
           <div class="chip pill" data-action="compare">Compare Files</div>
           <div class="chip pill" data-action="merge">Merge Files</div>
         </div>
-        <div id="searchPanel" class="search-panel hidden">
-          <div class="search-header">
-            <div>
-              <div class="search-title">Latest Web Search</div>
-              <div id="searchQueryLabel" class="search-query-label"></div>
-            </div>
-            <button type="button" class="btn mini" id="clearSearchBtn">Clear</button>
-          </div>
-          <div id="searchResultsList" class="search-results-list"></div>
-        </div>
         <small>Tip: Try "open youtube", "play music", "list notes", "remind me to drink water at 19:30"</small>
-        <!-- Pomodoro coffee-cup widget -->
-        <div id="pomodoroWidget" style="margin-top:14px; padding:10px 12px; border-radius:14px; border:1px solid rgba(255,255,255,0.2); background:rgba(8,6,20,0.6); display:flex; align-items:center; gap:16px; font-size:15px;">
-          <div style="width:70px; height:100px; border-radius:14px 14px 8px 8px; border:3px solid rgba(255,255,255,0.5); position:relative; overflow:hidden; background:rgba(15,12,32,0.85); box-shadow:0 8px 24px rgba(0,0,0,0.35) inset;">
-            <div id="coffeeFill" style="position:absolute; left:0; right:0; bottom:0; height:100%; background:linear-gradient(180deg,#e29d6a,#7a441e);"></div>
-          </div>
-          <div style="display:flex; flex-direction:column; gap:4px;">
-            <div style="font-weight:700; font-size:1rem; letter-spacing:0.4px;">Coffee Pomodoro</div>
-            <div id="pomodoroClock" style="font-family:monospace; letter-spacing:2px; font-size:1.4rem;">00:00</div>
-            <div id="pomodoroLabel" style="color:var(--muted); font-size:0.95rem;">Idle</div>
-          </div>
-        </div>
         <div class="card" style="margin-top:12px;">
           <div style="font-weight:600; margin-bottom:8px;">Generated Downloads</div>
           <div id="downloadsPanel" style="font-size:14px; display:flex; flex-direction:column; gap:6px;"></div>
@@ -547,6 +430,7 @@
       </div>
     </div>
   </div>
+  <div id="mobileSidebarOverlay" class="mobile-overlay" role="presentation"></div>
 
   <!-- Quick Actions bottom sheet modal -->
   <div id="quickActionsModal">
@@ -587,21 +471,10 @@
     const statusText = document.getElementById('statusText');
     const chatHero = document.getElementById('chatHero');
     const heroGreeting = document.getElementById('heroGreeting');
-    const typingIndicator = document.getElementById('typingIndicator');
-    // Gamification UI elements
-    const levelValue = document.getElementById('levelValue');
-    const xpValue = document.getElementById('xpValue');
-    const xpNeeded = document.getElementById('xpNeeded');
-    const xpBar = document.getElementById('xpBar');
-    const modeChips = document.getElementById('modeChips');
-    let lastGamestateLevel = null;
-    const searchPanel = document.getElementById('searchPanel');
-    const searchQueryLabel = document.getElementById('searchQueryLabel');
-    const searchResultsList = document.getElementById('searchResultsList');
-    const clearSearchBtn = document.getElementById('clearSearchBtn');
-    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-    const sideOverlay = document.getElementById('sideOverlay');
-    const sideCloseBtn = document.getElementById('sideCloseBtn');
+    const loginEmail = document.getElementById('loginEmail');
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const authStatus = document.getElementById('authStatus');
     // Error banner helpers (moved from top)
     const errorBanner = document.getElementById('errorBanner');
     const errorText = document.getElementById('errorText');
@@ -617,185 +490,14 @@
     if (copyErrorBtn) copyErrorBtn.onclick = async ()=>{ try{ await navigator.clipboard.writeText(errorText.textContent||''); }catch(e){} };
     if (retryBtn) retryBtn.onclick = ()=>{ hideError(); if (lastAction) lastAction(); };
 
-    function clearSearchResults(){
-      if (searchResultsList) searchResultsList.innerHTML = '';
-      if (searchQueryLabel) searchQueryLabel.textContent = '';
-      if (searchPanel) searchPanel.classList.add('hidden');
-    }
-
-    function hostnameFromUrl(urlString){
-      try {
-        const u = new URL(urlString);
-        return u.hostname.replace('www.', '');
-      } catch (e) {
-        return urlString || '';
-      }
-    }
-
-    function renderSearchResults(payload){
-      if (!searchPanel || !searchResultsList) return;
-      const results = Array.isArray(payload && payload.results) ? payload.results : [];
-      if (searchQueryLabel) {
-        const q = (payload && payload.query) ? `“${payload.query}”` : 'Recent lookup';
-        searchQueryLabel.textContent = q;
-      }
-      searchResultsList.innerHTML = '';
-      if (!results.length) {
-        const empty = document.createElement('div');
-        empty.className = 'search-empty';
-        empty.textContent = 'No web results yet.';
-        searchResultsList.appendChild(empty);
-      } else {
-        results.forEach((r) => {
-          const row = document.createElement('div');
-          row.className = 'search-row';
-          const title = document.createElement('a');
-          title.href = r.href || '#';
-          title.target = '_blank';
-          title.rel = 'noopener noreferrer';
-          title.textContent = r.title || 'Result';
-          const snippet = document.createElement('div');
-          snippet.className = 'search-snippet';
-          snippet.textContent = r.snippet || 'No description available.';
-          const meta = document.createElement('div');
-          meta.className = 'search-meta';
-          meta.textContent = hostnameFromUrl(r.href || '');
-          row.appendChild(title);
-          row.appendChild(snippet);
-          row.appendChild(meta);
-          searchResultsList.appendChild(row);
-        });
-      }
-      searchPanel.classList.remove('hidden');
-    }
-
-    function normalizeBossSegments(payload){
-      if (Array.isArray(payload && payload.segments)) {
-        return payload.segments;
-      }
-      const text = (payload && payload.text) ? String(payload.text).trim() : '';
-      if (!text) return [];
-      return text.split(/\n{2,}/).map((chunk) => ({ title: null, body: chunk.trim() }));
-    }
-
-    function renderBossLevelMessage(payload){
-      const card = document.createElement('div');
-      card.className = 'boss-level-card';
-      if (payload && payload.theme === 'glitch') {
-        card.classList.add('boss-glitch');
-      }
-      const title = payload && payload.title ? payload.title : 'Boss Level';
-      const titleEl = document.createElement('div');
-      titleEl.className = 'boss-level-title';
-      titleEl.textContent = title;
-      card.appendChild(titleEl);
-      const segments = normalizeBossSegments(payload);
-      segments.forEach((seg, idx) => {
-        const block = document.createElement('div');
-        block.className = 'boss-block';
-        const heading = document.createElement('div');
-        heading.className = 'boss-block-title';
-        heading.textContent = seg && seg.title ? seg.title : `Phase ${idx + 1}`;
-        const body = document.createElement('div');
-        body.className = 'boss-block-body';
-        body.textContent = seg && seg.body ? seg.body : '';
-        block.appendChild(heading);
-        block.appendChild(body);
-        card.appendChild(block);
-      });
-      appendItem(card, 'bot');
-    }
-
-    function handleNewMessage(payload){
-      if (!payload) return;
-      const kind = (payload.kind || '').toLowerCase();
-      if (kind === 'search') {
-        const msg = payload.text || `Search ready for ${payload.query || 'your query.'}`;
-        appendItem(msg, payload.role === 'user' ? 'user' : 'bot');
-        return;
-      }
-      if (kind === 'boss_level') {
-        renderBossLevelMessage(payload);
-        return;
-      }
-      if (payload.text) {
-        appendItem(payload.text, payload.role === 'user' ? 'user' : 'bot');
-      }
-    }
-
-    if (clearSearchBtn) {
-      clearSearchBtn.onclick = () => clearSearchResults();
-    }
-
     // Busy state helpers
     const allButtons = ()=> Array.from(document.querySelectorAll('button.btn'));
     function setBusy(on){ allButtons().forEach(b=> b.disabled = !!on); }
-
-    // Pomodoro widget elements
-    const pomodoroWidget = document.getElementById('pomodoroWidget');
-    const coffeeFill = document.getElementById('coffeeFill');
-    const pomodoroClock = document.getElementById('pomodoroClock');
-    const pomodoroLabel = document.getElementById('pomodoroLabel');
-
-    function formatSeconds(sec){
-      const s = Math.max(0, Math.floor(sec||0));
-      const m = Math.floor(s / 60);
-      const r = s % 60;
-      return String(m).padStart(2,'0') + ':' + String(r).padStart(2,'0');
-    }
-
-    function updateTimerText(payload){
-      if (!pomodoroClock) return;
-      const remaining = payload && typeof payload.remaining_seconds === 'number'
-        ? Math.max(0, payload.remaining_seconds)
-        : 0;
-      pomodoroClock.textContent = formatSeconds(remaining);
-    }
-
-    function updateCupFill(payload){
-      if (!coffeeFill) return;
-      const total = payload && typeof payload.total_seconds === 'number' ? Math.max(0, payload.total_seconds) : 0;
-      const remaining = payload && typeof payload.remaining_seconds === 'number' ? Math.max(0, payload.remaining_seconds) : 0;
-      if (total <= 0){
-        coffeeFill.style.height = '0%';
-        return;
-      }
-      const ratio = Math.max(0, Math.min(1, remaining / total));
-      coffeeFill.style.height = (ratio * 100).toFixed(1) + '%';
-    }
-
-    function updatePomodoroUI(payload){
-      if (!pomodoroWidget || !coffeeFill || !pomodoroClock || !pomodoroLabel) return;
-      const totalRaw = payload && typeof payload.total_seconds === 'number' ? payload.total_seconds : 0;
-      const remainingRaw = payload && typeof payload.remaining_seconds === 'number' ? payload.remaining_seconds : 0;
-      const total = Math.max(0, totalRaw);
-      const remaining = Math.max(0, remainingRaw);
-      const mode = (payload && payload.mode) || 'pomodoro';
-      const progress = payload && typeof payload.progress === 'number'
-        ? Math.max(0, Math.min(1, payload.progress))
-        : (total > 0 ? 1 - (remaining / total) : 0);
-
-      pomodoroWidget.style.display = 'flex';
-      updateTimerText({ remaining_seconds: remaining || total });
-      updateCupFill({ total_seconds: total, remaining_seconds: remaining });
-
-      if (mode === 'break') pomodoroLabel.textContent = total > 0 ? 'Break time' : 'Break queued';
-      else if (mode === 'mini') pomodoroLabel.textContent = total > 0 ? 'Mini Pomodoro' : 'Mini idle';
-      else if (mode === 'focus') pomodoroLabel.textContent = total > 0 ? 'Focus sprint' : 'Focus idle';
-      else pomodoroLabel.textContent = total > 0 ? 'Pomodoro' : 'Idle';
-    }
-
-    function hidePomodoroUI(){
-      // Keep widget visible but show idle state
-      updatePomodoroUI({ mode: 'pomodoro', total_seconds: 0, remaining_seconds: 0, progress: 0 });
-    }
 
     let socket = null;
     let user = { logged_in: false, email: null, profile: {} };
     let historyItems = [];
     let chatsList = [];
-    let lastUserMsgEl = null;
-    let lastUserText = '';
     try {
       socket = io({ transports: ['websocket', 'polling'], withCredentials: false });
     } catch (e) {
@@ -804,97 +506,12 @@
 
     function hideHero(){ if (chatHero) chatHero.style.display = 'none'; }
 
-    function showTyping(on) {
-      if (!typingIndicator) return;
-      typingIndicator.style.display = on ? 'flex' : 'none';
-    }
-
-    function appendItem(content, who='bot') {
-      const row = document.createElement('div');
-      row.className = 'chat-row ' + (who === 'bot' ? 'chat-row-bot' : 'chat-row-user');
-
-      // Avatar
-      const avatar = document.createElement('div');
-      avatar.className = 'msg-avatar ' + (who === 'bot' ? 'bot-msg-avatar' : 'user-msg-avatar');
-      avatar.textContent = who === 'bot' ? 'D' : 'You';
-
-      const bubble = document.createElement('div');
-      bubble.className = 'item ' + (who === 'bot' ? 'bot-item' : 'user-item');
-      if (typeof content === 'string') {
-        bubble.innerHTML = `<div class="${who}">${content}</div>`;
-      } else if (content instanceof HTMLElement) {
-        const wrapper = document.createElement('div');
-        wrapper.className = `${who}-rich rich-block`;
-        wrapper.appendChild(content);
-        bubble.appendChild(wrapper);
-      } else {
-        bubble.innerHTML = `<div class="${who}"></div>`;
-      }
-
-      // User tools: edit/resend last message
-      if (who === 'user') {
-        const tools = document.createElement('div');
-        tools.className = 'msg-tools';
-        const editBtn = document.createElement('button');
-        editBtn.type = 'button';
-        editBtn.className = 'edit-btn';
-        editBtn.textContent = 'Edit & resend';
-        editBtn.onclick = () => {
-          try {
-            const raw = bubble.querySelector('.user')?.textContent || '';
-            input.value = raw;
-            input.focus();
-          } catch (e) {}
-        };
-        tools.appendChild(editBtn);
-        bubble.appendChild(tools);
-
-        lastUserMsgEl = bubble;
-        lastUserText = text;
-      }
-
-      // Bot reactions
-      if (who === 'bot') {
-        const reactions = document.createElement('div');
-        reactions.className = 'reactions';
-        const label = document.createElement('span');
-        label.textContent = 'Was this helpful?';
-
-        const up = document.createElement('button');
-        up.type = 'button';
-        up.className = 'react-btn';
-        up.textContent = '👍';
-
-        const down = document.createElement('button');
-        down.type = 'button';
-        down.className = 'react-btn';
-        down.textContent = '👎';
-
-        up.onclick = () => {
-          up.classList.toggle('reacted', true);
-          down.classList.toggle('reacted', false);
-        };
-        down.onclick = () => {
-          down.classList.toggle('reacted', true);
-          up.classList.toggle('reacted', false);
-        };
-
-        reactions.appendChild(label);
-        reactions.appendChild(up);
-        reactions.appendChild(down);
-        bubble.appendChild(reactions);
-      }
-
-      if (who === 'bot') {
-        row.appendChild(avatar);
-        row.appendChild(bubble);
-      } else {
-        row.appendChild(bubble);
-        row.appendChild(avatar);
-      }
-
-      row.classList.add('fade-in');
-      log.appendChild(row);
+    function appendItem(text, who='bot') {
+      const el = document.createElement('div');
+      el.className = 'item ' + (who === 'bot' ? 'bot-item' : 'user-item');
+      el.innerHTML = `<div class="${who}">${text}</div>`;
+      el.classList.add('fade-in');
+      log.appendChild(el);
       hideHero();
       try {
         window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
@@ -932,7 +549,18 @@
     }
 
     function refreshAuthUI() {
-      // Removed email login/verification UI
+      if (!authStatus || !loginEmail || !loginBtn || !logoutBtn) return;
+      if (user && user.logged_in) {
+        authStatus.textContent = 'Signed in as ' + (user.email || '');
+        loginEmail.value = user.email || '';
+        loginBtn.style.display = 'none';
+        logoutBtn.style.display = 'inline-block';
+      } else {
+        authStatus.textContent = 'Guest – chats not saved';
+        loginEmail.value = '';
+        loginBtn.style.display = 'inline-block';
+        logoutBtn.style.display = 'none';
+      }
     }
 
     function renderHistory() {
@@ -968,65 +596,6 @@
       });
     }
 
-    async function refreshGamestate() {
-      try {
-        const r = await fetch('/api/gamestate');
-        if (!r.ok) return;
-        const data = await r.json();
-        if (!data || !data.ok || !data.gamification) return;
-        const g = data.gamification;
-
-        const lvl = Number(g.level || 1);
-        const xp = Number(g.xp || 0);
-        const need = Number(g.xp_needed || 50);
-        if (levelValue) levelValue.textContent = String(lvl);
-        if (xpValue) xpValue.textContent = String(xp);
-        if (xpNeeded) xpNeeded.textContent = String(need);
-        if (xpBar) {
-          const pct = need > 0 ? Math.max(0, Math.min(100, Math.round((xp / need) * 100))) : 0;
-          xpBar.style.width = pct + '%';
-        }
-
-        const mode = (g.mode || 'balanced').toLowerCase();
-        if (modeChips) {
-          const buttons = modeChips.querySelectorAll('[data-mode]');
-          buttons.forEach(btn => {
-            const m = (btn.getAttribute('data-mode') || '').toLowerCase();
-            if (m === mode) {
-              btn.classList.add('pill');
-            } else {
-              btn.classList.remove('pill');
-            }
-          });
-        }
-
-        if (lastGamestateLevel !== null && lvl > lastGamestateLevel) {
-          appendItem('Level up! You reached Level ' + lvl + '.', 'bot');
-        }
-        lastGamestateLevel = lvl;
-      } catch (e) {
-        // ignore errors
-      }
-    }
-
-    if (modeChips) {
-      modeChips.addEventListener('click', async (e) => {
-        const btn = e.target.closest('[data-mode]');
-        if (!btn) return;
-        const mode = btn.getAttribute('data-mode');
-        try {
-          await fetch('/api/gamestate/mode', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mode })
-          });
-          refreshGamestate();
-        } catch (err) {
-          // silent
-        }
-      });
-    }
-
     let voiceEnabled = false;
     function speakText(text) {
       try {
@@ -1042,76 +611,13 @@
 
     stopSpeakBtn.onclick = () => window.speechSynthesis.cancel();
 
-    function maybeAddFollowup(botText) {
-      try {
-        const plain = String(botText || '');
-        if (plain.length < 220) return;
-        if (Math.random() > 0.25) return; // 25% chance
-        const followups = [
-          "Want me to break that down into simpler steps?",
-          "If you like, I can turn this into a quick to-do list.",
-          "Need an example or a shorter version of that?",
-          "We can make a mini-plan out of this. Want to?",
-          "If you're stuck, I can re-explain it in a different way."
-        ];
-        const line = followups[Math.floor(Math.random() * followups.length)];
-        appendItem(line, 'bot');
-      } catch (e) {}
-    }
-
-    // Web Audio beeps for timers / reminders
-    let audioCtx = null;
-    function ensureAudioCtx(){
-      if (audioCtx) return audioCtx;
-      try {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        if (!AC) return null;
-        audioCtx = new AC();
-      } catch (e) { audioCtx = null; }
-      return audioCtx;
-    }
-
-    function playBeep(kind){
-      const ctx = ensureAudioCtx();
-      if (!ctx) return;
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      let freq = 880, duration = 0.08, vol = 0.08;
-      if (kind === 'reminder') { freq = 1200; duration = 0.5; vol = 0.18; }
-      else if (kind === 'pomodoro_start') { freq = 660; duration = 0.2; vol = 0.12; }
-      else if (kind === 'pomodoro_end') { freq = 520; duration = 0.9; vol = 0.2; }
-      else if (kind === 'tick') { freq = 1000; duration = 0.03; vol = 0.04; }
-      osc.frequency.value = freq;
-      gain.gain.value = vol;
-      const now = ctx.currentTime;
-      gain.gain.setValueAtTime(vol, now);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-      osc.start(now);
-      osc.stop(now + duration + 0.02);
-    }
-
-    function applyPomodoroPayload(payload){
-      if (payload && typeof payload === 'object') {
-        updatePomodoroUI(payload);
-      }
-    }
-
     async function sendCommand(text) {
       if (!text) return;
       appendItem(text, 'user');
-      hideError();
-      setBusy(true);
-      showTyping(true);
+      hideError(); setBusy(true);
       // Prefer socket if connected
       if (socket && socket.connected) {
-        try {
-          socket.emit('user_command', { text });
-          return;
-        } catch (e) {
-          setBusy(false);
-          showTyping(false);
-        }
+        try { socket.emit('user_command', { text }); setBusy(false); return; } catch (e) { setBusy(false); }
       }
       // Fallback to HTTP
       try {
@@ -1121,7 +627,6 @@
         });
         const data = await r.json();
         setBusy(false);
-        showTyping(false);
         if (data && data.action === 'open_url' && data.url) {
           try { window.open(data.url, '_blank'); } catch (e) {}
         }
@@ -1129,32 +634,43 @@
         if (t) {
           appendItem(t, 'bot');
           speakText(t);
-          maybeAddFollowup(t);
         }
-        if (data && data.pomodoro) {
-          applyPomodoroPayload(data.pomodoro);
-        }
-        refreshGamestate();
         if (data && Array.isArray(data.sources_labeled) && data.sources_labeled.length) {
           const list = data.sources_labeled.map(s => `<a href="${s.url}" target="_blank" rel="noopener noreferrer">${s.label}</a>`).join(' | ');
           appendItem('Sources: ' + list, 'bot');
         }
       } catch (e) {
         setBusy(false);
-        showTyping(false);
         showError('Request failed. Please retry.', ()=> sendCommand(text));
       }
     }
 
     async function loadMe() {
-      // Pure guest mode: no email login, profile stored locally
-      user = { logged_in: false, email: null, profile: {} };
-      appendItem('Guest mode: your chats won\'t be saved. Profile stored locally.', 'bot');
       try {
-        const gp = await fetch('/api/guest_profile');
-        const gd = await gp.json();
-        if (gd && gd.ok) { user.profile = gd.profile || {}; renderProfile(); }
-      } catch (e) {}
+        const r = await fetch('/me');
+        const d = await r.json();
+        user = d || { logged_in:false };
+        if (!user.logged_in) {
+          appendItem('Guest mode: your chats won\'t be saved. Profile stored locally.', 'bot');
+          // load guest profile into memory card
+          try {
+            const gp = await fetch('/api/guest_profile');
+            const gd = await gp.json();
+            if (gd && gd.ok) { user.profile = gd.profile || {}; renderProfile(); }
+          } catch (e) {}
+          refreshAuthUI();
+          return;
+        }
+        if (heroGreeting) {
+          const name = (user.profile && user.profile.name) || user.email || 'friend';
+          heroGreeting.textContent = 'Good to see you, ' + name + '.';
+        }
+        appendItem('Signed in as ' + user.email, 'bot');
+        renderProfile();
+        await loadHistory();
+        await maybeRunOnboarding();
+        refreshAuthUI();
+      } catch (e) { /* ignore */ }
     }
 
     async function loadHistory() {
@@ -1163,36 +679,13 @@
           fetch('/api/chat_history'),
           fetch('/api/chats')
         ]);
-
-        // Handle not_verified / auth errors gracefully
-        if (!h.ok) {
-          try {
-            const err = await h.json();
-            if (err && err.error === 'not_verified') {
-              appendItem('Verify your email to use saved chats. Your current session is guest-only.', 'bot');
-              return;
-            }
-          } catch (e) {}
-          return;
-        }
-
+        if (!h.ok) return;
         const d = await h.json();
-        if (!d.ok) {
-          if (d.error === 'not_verified') {
-            appendItem('Verify your email to use saved chats.', 'bot');
-          }
-          return;
-        }
+        if (!d.ok) return;
         historyItems = d.items || [];
         if (l.ok) {
-          try {
-            const dl = await l.json();
-            if (dl && dl.ok) {
-              chatsList = dl.chats || [];
-            } else if (dl && dl.error === 'not_verified') {
-              appendItem('Verify your email to see your saved chat list.', 'bot');
-            }
-          } catch (e) {}
+          const dl = await l.json();
+          chatsList = (dl && dl.ok) ? dl.chats || [] : [];
         }
         log.innerHTML = '';
         if (historyItems.length) {
@@ -1277,80 +770,11 @@
         if (text) {
           appendItem(text, 'bot');
           speakText(text);
-          maybeAddFollowup(text);
-        }
-        if (data && data.pomodoro) {
-          applyPomodoroPayload(data.pomodoro);
         }
         if (data && Array.isArray(data.sources_labeled) && data.sources_labeled.length) {
           const list = data.sources_labeled.map(s => `<a href="${s.url}" target="_blank" rel="noopener noreferrer">${s.label}</a>`).join(' | ');
           appendItem('Sources: ' + list, 'bot');
         }
-        refreshGamestate();
-        setBusy(false);
-        showTyping(false);
-      });
-
-      socket.on('pomodoro_started', (data) => {
-        updatePomodoroUI({
-          mode: data && data.mode,
-          total_seconds: data && data.total_seconds,
-          remaining_seconds: data && data.total_seconds,
-          progress: 0,
-        });
-      });
-
-      socket.on('pomodoro_tick', (data) => {
-        updatePomodoroUI(data || {});
-      });
-
-      socket.on('pomodoro_done', () => {
-        hidePomodoroUI();
-      });
-
-      socket.on('pomodoro_paused', () => {
-        if (pomodoroLabel) pomodoroLabel.textContent = 'Paused';
-      });
-
-      socket.on('pomodoro_resumed', () => {
-        if (pomodoroLabel) pomodoroLabel.textContent = 'Running';
-      });
-
-      socket.on('pomodoro_reset', (data) => {
-        updatePomodoroUI({
-          mode: data && data.mode,
-          total_seconds: data && data.total_seconds,
-          remaining_seconds: data && data.total_seconds,
-          progress: 0,
-        });
-      });
-
-      socket.on('pomodoro_stopped', () => {
-        hidePomodoroUI();
-      });
-
-      socket.on('play_beep', (payload) => {
-        const kind = payload && payload.kind || 'tick';
-        playBeep(kind);
-      });
-
-      socket.on('reminder_fired', (payload) => {
-        const t = payload && payload.text ? String(payload.text) : '';
-        if (t) appendItem('⏰ ' + t, 'bot');
-      });
-
-      socket.on('search_results', (payload) => {
-        renderSearchResults(payload || {});
-      });
-
-      socket.on('new_message', (payload) => {
-        handleNewMessage(payload || {});
-      });
-
-      socket.on('level_up', (data) => {
-        const lvl = data && data.level ? ` You're now Level ${data.level}.` : '';
-        appendItem('Level up! 🎉' + lvl, 'bot');
-        refreshGamestate();
       });
     } else {
       statusText.textContent = 'HTTP mode';
@@ -1406,17 +830,67 @@
     const layoutEl = document.getElementById('layout');
     const toggleSide = document.getElementById('toggleSide');
     const expandSide = document.getElementById('expandSide');
+    const sidebarEl = document.getElementById('sidebar');
+    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+    const mobileOverlay = document.getElementById('mobileSidebarOverlay');
+    const isMobileView = () => window.innerWidth <= 768;
+    const applySidebarAria = (isOpen) => {
+      if (!sidebarEl) return;
+      if (isMobileView()) {
+        sidebarEl.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+      } else {
+        sidebarEl.removeAttribute('aria-hidden');
+      }
+    };
+    const setMobileSidebar = (open) => {
+      if (!layoutEl || !mobileMenuBtn || !mobileOverlay) return;
+      const isOpen = !!open;
+      layoutEl.classList.toggle('mobile-open', isOpen);
+      document.body.classList.toggle('mobile-sidebar-open', isOpen);
+      mobileMenuBtn.classList.toggle('active', isOpen);
+      mobileMenuBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+      mobileOverlay.classList.toggle('visible', isOpen);
+      applySidebarAria(isOpen);
+    };
+    if (mobileMenuBtn) {
+      mobileMenuBtn.addEventListener('click', () => {
+        const next = !mobileMenuBtn.classList.contains('active');
+        setMobileSidebar(next);
+      });
+    }
+    if (mobileOverlay) {
+      mobileOverlay.addEventListener('click', () => setMobileSidebar(false));
+    }
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && layoutEl && layoutEl.classList.contains('mobile-open')) {
+        setMobileSidebar(false);
+      }
+    });
+    const syncSidebarState = () => {
+      if (!isMobileView()) {
+        setMobileSidebar(false);
+        applySidebarAria(true);
+      } else {
+        applySidebarAria(layoutEl && layoutEl.classList.contains('mobile-open'));
+      }
+    };
+    window.addEventListener('resize', syncSidebarState);
+    syncSidebarState();
     let collapsed = false; let expanded = false;
-    toggleSide.onclick = () => {
-      collapsed = !collapsed;
-      layoutEl.classList.toggle('collapsed', collapsed);
-      toggleSide.textContent = collapsed ? 'Show Sidebar' : 'Hide Sidebar';
-    };
-    expandSide.onclick = () => {
-      expanded = !expanded;
-      layoutEl.classList.toggle('expanded', expanded);
-      expandSide.textContent = expanded ? 'Shrink' : 'Expand';
-    };
+    if (toggleSide) {
+      toggleSide.onclick = () => {
+        collapsed = !collapsed;
+        if (layoutEl) layoutEl.classList.toggle('collapsed', collapsed);
+        toggleSide.textContent = collapsed ? 'Show Sidebar' : 'Hide Sidebar';
+      };
+    }
+    if (expandSide) {
+      expandSide.onclick = () => {
+        expanded = !expanded;
+        if (layoutEl) layoutEl.classList.toggle('expanded', expanded);
+        expandSide.textContent = expanded ? 'Shrink' : 'Expand';
+      };
+    }
     // Removed New Chat / Clear buttons per request
     // Update sidebar in guest mode too
     renderProfile();
@@ -1449,13 +923,55 @@
       qaCloseBtn.onclick = () => { closeQAModal(); };
     }
 
-    // No email login in guest-only mode
+    if (loginBtn) {
+      loginBtn.onclick = async () => {
+        const email = (loginEmail && loginEmail.value || '').trim();
+        if (!email) return;
+        try {
+          const r = await fetch('/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+          });
+          const d = await r.json();
+          if (!r.ok || !d.ok) {
+            appendItem('Login failed: ' + (d.error || 'error'), 'bot');
+            return;
+          }
+          user = { logged_in: true, email: d.email || email, profile: {} };
+          appendItem('Signed in as ' + user.email, 'bot');
+          await loadHistory();
+          refreshAuthUI();
+        } catch (e) {
+          appendItem('Login error. Please try again.', 'bot');
+        }
+      };
+    }
+
+    if (logoutBtn) {
+      logoutBtn.onclick = async () => {
+        try {
+          await fetch('/logout', { method: 'POST' });
+        } catch (e) {}
+        user = { logged_in: false, email: null, profile: {} };
+        historyItems = [];
+        chatsList = [];
+        log.innerHTML = '';
+        renderHistory();
+        refreshAuthUI();
+        appendItem('Switched to guest mode. Chats will not be saved.', 'bot');
+      };
+    }
 
     const newChatBtn = document.getElementById('newChatBtn');
     const clearChatBtn = document.getElementById('clearChatBtn');
 
     if (newChatBtn) {
       newChatBtn.onclick = async () => {
+        if (!user || !user.logged_in) {
+          appendItem('Sign in with an email to create saved chats.', 'bot');
+          return;
+        }
         try {
           const r = await fetch('/api/chats/new', { method: 'POST' });
           const d = await r.json();
@@ -1474,6 +990,13 @@
 
     if (clearChatBtn) {
       clearChatBtn.onclick = async () => {
+        if (!user || !user.logged_in) {
+          log.innerHTML = '';
+          historyItems = [];
+          renderHistory();
+          appendItem('Cleared current guest view.', 'bot');
+          return;
+        }
         try {
           const r = await fetch('/api/chats/clear', { method: 'POST' });
           const d = await r.json();
@@ -1711,30 +1234,6 @@
         uploadBtn.click();
       });
     }
-
-    // Daily motivation (once per day)
-    (function(){
-      const KEY = 'draco-motivation-date';
-      try {
-        const today = new Date().toISOString().slice(0,10);
-        const last = localStorage.getItem(KEY);
-        if (last !== today) {
-          const lines = [
-            'New day, new XP. Even 30 focused minutes today will move you forward.',
-            'Tiny consistent steps beat random big bursts. What shall we tackle first?',
-            'You showed up. That already puts you ahead of who you were yesterday.',
-            'Let’s make at least one thing today that Future You will be proud of.',
-            'No pressure for perfection—just progress. I’m here with you.'
-          ];
-          const msg = lines[Math.floor(Math.random()*lines.length)];
-          appendItem(msg, 'bot');
-          localStorage.setItem(KEY, today);
-        }
-      } catch (e) {}
-    })();
-
-    // Load initial gamification state on startup
-    refreshGamestate();
 
     // Keyboard shortcuts
     document.addEventListener('keydown', (e) => {
