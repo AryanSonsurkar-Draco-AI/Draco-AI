@@ -19,7 +19,7 @@ from collections import deque
 from typing import Optional
 import re
 from flask import session
-from flask import Flask, send_from_directory, request, session, redirect, url_for, jsonify
+from flask import Flask, send_from_directory, request, session, redirect, url_for, jsonify, render_template
 from flask_socketio import SocketIO, emit
 from werkzeug.utils import secure_filename
 try:
@@ -102,6 +102,7 @@ ON_SERVER = ON_RENDER or (os.environ.get("PORT") is not None) or (os.environ.get
 # Force Flask-SocketIO to use threading instead of eventlet or gevent
 os.environ["FLASK_SOCKETIO_ASYNC_MODE"] = "threading"
 app = Flask(__name__, static_folder=".", template_folder=".")
+app.jinja_loader.searchpath.append(os.path.join(app.root_path, "templates"))
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-change-me")
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 # Limit uploads to 20 MB
@@ -113,6 +114,9 @@ NOTES_FILE = "notes.json"
 REMINDERS_FILE = "reminders.json"
 WEATHER_API_KEY = ""   # add your OpenWeatherMap key if desired
 NEWSAPI_KEY = ""       # add your News API key if desired
+DEEPSEEK_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+DEEPSEEK_MODEL = "deepseek/deepseek-chat"
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY")
 USERS_DIR = os.path.join(os.getcwd(), "users")
 
 
@@ -684,14 +688,14 @@ def get_weather(city):
     except Exception as e:
         return f"Error fetching weather: {str(e)}"
 
-NEWS_API_KEY = "231a93af4a8b4dc6bafbb736c20b20c3"
+NEWSAPI_KEY = "231a93af4a8b4dc6bafbb736c20b20c3"
 
 def get_news(topic="general"):
-    if not NEWS_API_KEY:
-        return "News feature needs an API key. Add it to NEWS_API_KEY."
+    if not NEWSAPI_KEY:
+        return "News feature needs an API key. Add it to NEWSAPI_KEY."
     
     try:
-        url = f"https://newsapi.org/v2/top-headlines?q={topic}&apiKey={NEWS_API_KEY}&pageSize=5"
+        url = f"https://newsapi.org/v2/top-headlines?q={topic}&apiKey={NEWSAPI_KEY}&pageSize=5"
         response = requests.get(url)
         data = response.json()
         
@@ -779,21 +783,82 @@ def convert_unit(cmd):
         return f"Error: {str(e)}"
 
 # ------------- Search & utilities -------------
-def web_search_duckduckgo(query: str, limit: int = 3):
+def duck_search(query: str, limit: int = 3) -> str:
     if DDGS is None:
-        return "ddgs package not installed."
+        return "DuckDuckGo search unavailable (ddgs not installed)."
+
+    query = (query or "").strip()
+    if not query:
+        return "Please provide a search query."
+
+    results = []
     try:
-        results = []
         with DDGS() as ddgs:
             for r in ddgs.text(query, max_results=limit):
-                body = r.get("body", "").strip()
+                try:
+                    title = (r.get("title") or "").strip()
+                    body = (r.get("body") or "").strip()
+                    href = (r.get("href") or "").strip()
+                except Exception:
+                    continue
+
+                if not (title or body or href):
+                    continue
+
+                lines = [f"- {title or 'Result'}"]
                 if body:
-                    results.append(body)
-        if not results:
-            return "No results found."
-        return " | ".join(results)[:1000]
-    except Exception as e:
-        return f"Search error: {e}"
+                    lines.append(f"  {body}")
+                if href:
+                    lines.append(f"  {href}")
+                results.append("\n".join(lines))
+    except Exception as exc:
+        return f"DuckDuckGo search error: {exc}"
+
+    if not results:
+        return "No results found bro."
+
+    return "\n\n".join(results[:limit])
+
+# ------------- DeepSeek integration -------------
+def draco_ai(prompt: str) -> str:
+    if not prompt:
+        return ""
+    if not DEEPSEEK_API_KEY:
+        return "DeepSeek API key not configured. Set the DEEPSEEK_API_KEY environment variable."
+
+    headers = {
+        "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+        "HTTP-Referer": "http://localhost",
+        "X-Title": "Draco-Terminal",
+    }
+
+    data = {
+        "model": DEEPSEEK_MODEL,
+        "messages": [
+            {"role": "system", "content": "You are Draco, a friendly assistant."},
+            {"role": "user", "content": prompt},
+        ],
+    }
+
+    try:
+        response = requests.post(DEEPSEEK_API_URL, headers=headers, json=data, timeout=60)
+        response.raise_for_status()
+        payload = response.json()
+        choices = payload.get("choices") or []
+        if not choices:
+            return "DeepSeek error: No response choices returned."
+        message = choices[0].get("message", {}).get("content", "").strip()
+        if not message:
+            return "DeepSeek error: Empty response content."
+        return message
+    except requests.HTTPError as http_err:
+        try:
+            detail = response.json().get("error", {}).get("message", str(http_err))
+        except Exception:
+            detail = str(http_err)
+        return f"DeepSeek error: {detail}"
+    except Exception as exc:
+        return f"DeepSeek error: {exc}"
 
 # ------------- Command processing (centralised) -------------
 def process_command(raw_cmd: str) -> str:
@@ -1238,7 +1303,8 @@ def process_command(raw_cmd: str) -> str:
     # web search
     if cmd.startswith("search for ") or cmd.startswith("what is ") or cmd.startswith("who is "):
         q = cmd.replace("search for ", "").replace("what is ", "").replace("who is ", "")
-        res = web_search_duckduckgo(q)
+        res = duck_search(q)
+
         speak("Here's what I found.")
         return res
 
@@ -1332,6 +1398,13 @@ def process_command(raw_cmd: str) -> str:
         except Exception as e:
             pass
 
+    deepseek_reply = draco_ai(raw_cmd)
+    if deepseek_reply:
+        lowered = deepseek_reply.lower()
+        if not (lowered.startswith("deepseek api key not configured") or lowered.startswith("deepseek error")):
+            speak(deepseek_reply)
+        return deepseek_reply
+
     # fallback
     speak("I didn't get that. Try asking me to open apps, play music, take notes, set reminders or search the web.")
     return "Unknown command. Try: open youtube, play music, take note, set reminder, search for ..."
@@ -1347,6 +1420,10 @@ def index():
 def guest_mode():
     # Guest mode (login removed) – just serve app
     return send_from_directory(".", "draco.html")
+
+@app.route("/pro")
+def pro_page():
+    return render_template("pro.html")
 
 @app.route("/login", methods=["POST"])
 def login():
@@ -1488,11 +1565,24 @@ UPLOADS_DIR = os.path.join(os.getcwd(), "uploads")
 ensure_dir(UPLOADS_DIR)
 
 def research_query_to_texts(query: str, limit: int = 6):
-    text = web_search_duckduckgo(query, limit=limit)
-    if isinstance(text, str):
-        parts = [p.strip() for p in text.split("|") if p.strip()]
-        return parts[:limit] if parts else [text]
-    return [str(text)]
+    text = duck_search(query, limit=limit)
+
+    if not isinstance(text, str):
+        return [str(text)]
+
+    normalized = text.strip()
+    if not normalized:
+        return [text]
+
+    blocks = [b.strip() for b in normalized.split("\n\n") if b.strip()]
+    if not blocks:
+        return [normalized]
+
+    cleaned = []
+    for block in blocks[:limit]:
+        lines = [ln.strip() for ln in block.split("\n") if ln.strip()]
+        cleaned.append(" ".join(lines))
+    return cleaned or [normalized]
 
 def research_query_to_texts_with_sources(query: str, limit: int = 6):
     """Return (texts, sources_urls) using DDGS when available.
