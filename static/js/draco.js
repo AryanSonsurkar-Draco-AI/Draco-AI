@@ -4,23 +4,55 @@
    - Displays chat messages and keeps Memory in localStorage
 */
 
-const socket = io.connect("http://localhost:5000");
+const socket = io({
+  transports: ["websocket"],
+});
 
 socket.on("connect", () => {
-  appendMessage("draco", "Connected to Draco bridge ✅");
+  addMessage("bot", "Connected to Draco bridge ✅");
 });
 
 socket.on("draco_response", (data) => {
-  appendMessage("draco", data.text);
-  saveMemory("Draco: " + data.text);
-  setMode("speaking");
-  setTimeout(()=> setMode("idle"), 700);
+  hideTyping();
+  if (!data) return;
+  if (data.text) {
+    addMessage("bot", data.text);
+    saveMemory("Draco: " + data.text);
+    setMode("speaking");
+    setTimeout(() => setMode("idle"), 700);
+  }
+  if (data.action === "open_url" && data.url) {
+    window.open(data.url, "_blank");
+  }
+  if (Array.isArray(data.sources_labeled) && data.sources_labeled.length) {
+    const src = data.sources_labeled
+      .map((s) => `🔗 <a href="${s.url}" target="_blank">${s.label}</a>`)
+      .join("<br>");
+    addMessage("bot", "Sources:<br>" + src);
+  }
+  if (data.doc) {
+    addMessage(
+      "bot",
+      `Document ready: <a href="${data.doc}" target="_blank">Download</a>`
+    );
+  }
 });
 
 function sendCommand(text) {
-  appendMessage("user", text);
+  if (!text) return;
+  addMessage("user", text);
   saveMemory("You: " + text);
-  socket.emit("user_command", { text });
+  showTyping();
+  if (socket && socket.connected) {
+    socket.emit("user_command", { text });
+    return;
+  }
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "command", text }));
+  } else {
+    addMessage("bot", "Bridge not connected. Start python_bridge.py first.");
+    hideTyping();
+  }
 }
 
 let ws = null;
@@ -34,20 +66,33 @@ const memoryList = document.getElementById("memoryList");
 const clearMemory = document.getElementById("clearMemory");
 const modeBadge = document.getElementById("modeBadge");
 const clientStatus = document.getElementById("clientStatus");
+const typingIndicator = document.getElementById("typing");
 
 const MEMORY_KEY = "draco_memory_v2";
 const MAX_MEMORY = 40;
 
 // helpers
-function appendMessage(who, text) {
+function addMessage(who, text) {
+  if (!chatWindow) return;
+  const role = who === "user" ? "user" : "bot";
   const el = document.createElement("div");
-  el.className = `msg ${who}`;
-  const bubble = document.createElement("div");
-  bubble.className = "bubble";
-  bubble.innerText = text;
-  el.appendChild(bubble);
+  el.className = `msg ${role}`;
+  if (role === "user") {
+    el.textContent = text;
+  } else {
+    const safe = typeof text === "string" ? text : String(text ?? "");
+    el.innerHTML = safe.replace(/\n/g, "<br>");
+  }
   chatWindow.appendChild(el);
   chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+function showTyping() {
+  if (typingIndicator) typingIndicator.classList.remove("hidden");
+}
+
+function hideTyping() {
+  if (typingIndicator) typingIndicator.classList.add("hidden");
 }
 
 function setMode(mode) {
@@ -79,11 +124,11 @@ function connectWS() {
   clientStatus.innerText = "Connecting...";
   ws.onopen = () => {
     clientStatus.innerText = "Connected";
-    appendMessage("draco", "Dashboard connected to Draco bridge.");
+    addMessage("bot", "Dashboard connected to Draco bridge.");
   };
   ws.onclose = () => {
     clientStatus.innerText = "Disconnected";
-    appendMessage("draco", "Disconnected from Draco bridge. Reconnecting in 3s...");
+    addMessage("bot", "Disconnected from Draco bridge. Reconnecting in 3s...");
     setTimeout(connectWS, 3000);
   };
   ws.onerror = (e) => {
@@ -92,43 +137,37 @@ function connectWS() {
   ws.onmessage = (ev) => {
     try {
       const data = JSON.parse(ev.data);
+      hideTyping();
       if (data.type === "speak") {
         // Draco said something
-        appendMessage("draco", data.text);
+        addMessage("bot", data.text);
         saveMemory("Draco: " + data.text);
         setMode("speaking");
         setTimeout(()=> setMode("idle"), 700);
       } else if (data.type === "status") {
         setMode(data.mode);
       } else if (data.type === "info") {
-        appendMessage("draco", data.text);
+        addMessage("bot", data.text);
       } else if (data.type === "raw") {
-        appendMessage("draco", data.text);
+        addMessage("bot", data.text);
+      }
+      if (data.doc) {
+        addMessage(
+          "bot",
+          `Document ready: <a href="${data.doc}" target="_blank">Download</a>`
+        );
       }
     } catch (err) {
       console.log("ws msg", ev.data);
-      appendMessage("draco", ev.data);
+      hideTyping();
+      addMessage("bot", ev.data);
     }
   };
 }
 
 connectWS();
 renderMemory();
-
-// send typed command
-function sendCommand(text) {
-  if (!text) return;
-  appendMessage("user", text);
-  saveMemory("You: " + text);
-  // send to server
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: "command", text }));
-  } else {
-    appendMessage("draco", "Bridge not connected. Start python_bridge.py first.");
-  }
-  setMode("listening");
-  setTimeout(()=> setMode("idle"), 400);
-}
+window.addEventListener("load", loadHistory);
 
 // send button
 sendBtn.addEventListener("click", () => {
@@ -176,7 +215,7 @@ if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
   });
 } else {
   micBtn.style.display = "none";
-  appendMessage("draco", "Voice recognition not supported in this browser.");
+  addMessage("bot", "Voice recognition not supported in this browser.");
 }
 
 // clear memory
@@ -186,4 +225,16 @@ clearMemory.addEventListener("click", () => {
 });
 
 // small startup message
-appendMessage("draco", "Draco Dashboard ready. Connect bridge and speak to Draco.");
+addMessage("bot", "Draco Dashboard ready. Connect bridge and speak to Draco.");
+
+async function loadHistory() {
+  try {
+    const res = await fetch("/api/chat_history");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data || !Array.isArray(data.items)) return;
+    data.items.forEach((m) => addMessage(m.who === "user" ? "user" : "bot", m.text));
+  } catch (err) {
+    console.error("Failed to load history", err);
+  }
+}

@@ -78,15 +78,25 @@ html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,'Segoe 
   flex:1;overflow:auto;border-radius:10px;padding:14px;background:linear-gradient(180deg, rgba(0,0,0,0.2), rgba(0,0,0,0.05));
   border:1px solid rgba(0,255,255,0.03);
 }
-.msg{display:flex;gap:12px;margin-bottom:12px;align-items:flex-end}
-.msg.user{justify-content:flex-end}
-.msg .bubble{
-  max-width:70%;padding:10px 14px;border-radius:14px;color:#001; font-weight:600; font-size:0.95rem;
-  box-shadow:0 6px 20px rgba(0,0,0,0.55);
+.msg {
+  max-width: 80%;
+  padding: 10px 14px;
+  border-radius: 12px;
+  margin: 8px 0;
+  animation: fadeIn 0.2s ease;
 }
-.msg.user .bubble{background:linear-gradient(90deg,#00eaff,#7cffc7)}
-.msg.draco .bubble{background:linear-gradient(90deg,#0b1220,#072033);color:#dff7ff;border:1px solid rgba(0,255,255,0.06)}
-.msg .meta{font-size:.75rem;color:var(--muted);margin-top:6px}
+.msg.user {
+  background: #3753ff;
+  color: white;
+  margin-left: auto;
+}
+.msg.bot {
+  background: #2a2a2a;
+  color: #fff;
+  margin-right: auto;
+}
+.typing { color: #777; padding: 8px; }
+.hidden { display: none; }
 
 /* controls */
 .controls{display:flex;gap:10px;margin-top:12px}
