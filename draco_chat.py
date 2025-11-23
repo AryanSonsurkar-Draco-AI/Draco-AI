@@ -228,5 +228,6 @@ def chat_reply(text: str, profile: Dict[str, Any], ctx: ChatContext) -> Dict[str
     if "favorite subject" in text.lower() and not profile.get("favorite_subject"):
         return {"text": "I don't know your favorite subject yet, can you tell me?"}
 
-    # Fallback
-    return {"text": "I'm not sure about that. Can you ask differently?"}
+    # Fallback → return empty so main.py fallback runs
+    return {"text": ""}
+
