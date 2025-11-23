@@ -803,11 +803,12 @@ def web_search_duckduckgo(query: str, limit: int = 3):
 def draco_ai(prompt):
     url = "https://openrouter.ai/api/v1/chat/completions"
 
-    API_KEY = "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"  
+    API_KEY = "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"  
 
     headers = {
         "Authorization": f"Bearer {API_KEY}",
-        "HTTP-Referer": "http://localhost",
+        "Content-Type": "application/json",        # FIX 1
+        "Referer": "https://draco-ai-cpmz.onrender.com",
         "X-Title": "Draco-Terminal"
     }
 
@@ -821,12 +822,44 @@ def draco_ai(prompt):
 
     try:
         response = requests.post(url, headers=headers, json=data)
+
+        if response.status_code != 200:
+            return f"API Error ({response.status_code}): {response.text}"   # FIX 2
+
         res = response.json()
 
         return res["choices"][0]["message"]["content"]
 
     except Exception as e:
         return f"Bro API error: {e}"
+    
+import requests
+
+def duckduck_fallback(query):
+    url = "https://api.duckduckgo.com/"
+    params = {
+        "q": query,
+        "format": "json",
+        "no_html": 1,
+        "skip_disambig": 1
+    }
+
+    try:
+        res = requests.get(url, params=params).json()
+
+        # Summary result
+        if res.get("AbstractText"):
+            return res["AbstractText"]
+
+        # Related topics
+        if "RelatedTopics" in res and len(res["RelatedTopics"]) > 0:
+            topic = res["RelatedTopics"][0]
+            if isinstance(topic, dict) and "Text" in topic:
+                return topic["Text"]
+
+        return "Sorry bro, kuch relevant nahi mila DuckDuckGo pe."
+    except Exception as e:
+        return f"DuckDuckGo fallback error: {e}"
     
 # ------------- Command processing (centralised) -------------
 def process_command(raw_cmd: str) -> str:
@@ -1413,11 +1446,14 @@ def process_command(raw_cmd: str) -> str:
 
     # fallback
     try:
-        reply = draco_ai(raw_cmd)
+        reply = draco_ai(raw_cmd)    # DeepSeek (main)
         speak(reply)
         return reply
-    except Exception as e:
-        return f"Draco fallback error: {e}"
+    except:
+    # FREE fallback
+        fallback_reply = duckduck_fallback(raw_cmd)
+        speak(fallback_reply)
+        return fallback_reply
 
 # ------------- Flask / SocketIO endpoints -------------
 @app.route("/")
