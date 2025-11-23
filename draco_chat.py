@@ -150,8 +150,8 @@ def personalize_followups(text: str, profile: Dict[str, Any]) -> str:
         if name:
             return f"How's your day, {name}?"
         return "How's your day?"
-    if "draw" in text.lower() and hobbies:
-        return f"Do you want to draw something today, {name or 'friend'}? I know you like {hobbies[0]}!"
+    if hobbies in text.lower() and hobbies:
+        return f"Do you want to do something like that today, {name or 'friend'}? I know you like {hobbies[0]}!"
     if fav and fav.lower() in text.lower():
         return f"I like {fav} too! Want a quick tip or a practice question?"
     return ""

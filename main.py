@@ -800,33 +800,39 @@ def web_search_duckduckgo(query: str, limit: int = 3):
     except Exception:
         return "Search temporarily failed. Try again."
     
-def duckduck_fallback(query):
-    url = "https://api.duckduckgo.com/"
-    params = {
-        "q": query,
-        "format": "json",
-        "no_html": 1,
-        "skip_disambig": 1
-    }
-
+def duckduck_fallback(query: str, limit: int = 3):
+    """
+    Fastest DuckDuckGo fallback using ddgs (DuckDuckGo Search API).
+    Much faster than HTML scraping or api.duckduckgo.com.
+    """
     try:
-        res = requests.get(url, params=params).json()
+        if not query:
+            return "Bro, kuch to bol 😭"
 
-        # 1. Direct summary
-        if res.get("AbstractText"):
-            return res["AbstractText"]
+        if DDGS is None:
+            return "DuckDuckGo module missing (ddgs)."
 
-        # 2. Related topics (backup)
-        if "RelatedTopics" in res and len(res["RelatedTopics"]) > 0:
-            topic = res["RelatedTopics"][0]
-            if isinstance(topic, dict) and "Text" in topic:
-                return topic["Text"]
+        results = []
+        with DDGS() as ddgs:
+            for r in ddgs.text(query, max_results=limit):
+                body = r.get("body", "").strip()
+                title = r.get("title", "").strip()
 
-        # 3. Nothing found
-        return "Bro, DuckDuckGo se kuch useful nahi mila."
+                if not body and title:
+                    body = title
+
+                if body:
+                    results.append(body)
+
+        if not results:
+            return "Bro, DuckDuckGo se kuch khaas nahi mila."
+
+        # Clean output
+        answer = " | ".join(results)
+        return answer[:1000]
 
     except Exception as e:
-        return f"DuckDuckGo fallback error: {e}"
+        return f"Bro fallback error: {e}"
     
 # ------------- Command processing (centralised) -------------
 def process_command(raw_cmd: str) -> str:
