@@ -787,13 +787,48 @@ def web_search_duckduckgo(query: str, limit: int = 3):
         with DDGS() as ddgs:
             for r in ddgs.text(query, max_results=limit):
                 body = r.get("body", "").strip()
+                title = r.get("title", "").strip()
+
+                if not body and title:
+                    body = title   # fallback
+
                 if body:
                     results.append(body)
+
         if not results:
             return "No results found."
         return " | ".join(results)[:1000]
+
+    except Exception:
+        return "Search temporarily failed. Try again."
+    
+def draco_ai(prompt):
+    url = "https://openrouter.ai/api/v1/chat/completions"
+
+    API_KEY = "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"  # <-- apna key yaha daalna (mujhe mat bhejna)
+
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "HTTP-Referer": "http://localhost",
+        "X-Title": "Draco-Terminal"
+    }
+
+    data = {
+        "model": "deepseek/deepseek-chat",
+        "messages": [
+            {"role": "system", "content": "You are Draco, a friendly assistant."},
+            {"role": "user", "content": prompt}
+        ]
+    }
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        res = response.json()
+
+        return res["choices"][0]["message"]["content"]
+
     except Exception as e:
-        return f"Search error: {e}"
+        return f"Bro API error: {e}"
 
 # ------------- Command processing (centralised) -------------
 def process_command(raw_cmd: str) -> str:
@@ -1333,8 +1368,12 @@ def process_command(raw_cmd: str) -> str:
             pass
 
     # fallback
-    speak("I didn't get that. Try asking me to open apps, play music, take notes, set reminders or search the web.")
-    return "Unknown command. Try: open youtube, play music, take note, set reminder, search for ..."
+    try:
+        reply = draco_ai(raw_cmd)
+        speak(reply)
+        return reply
+    except Exception as e:
+        return f"Draco fallback error: {e}"
 
 # ------------- Flask / SocketIO endpoints -------------
 @app.route("/")

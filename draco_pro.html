@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Draco Pro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-start: #0f0c1f;
+      --bg-end: #171333;
+      --card: #1c1842;
+      --accent: #7c4dff;
+      --accent-2: #00bfa5;
+      --text: #ece8ff;
+      --muted: #a7a2c7;
+      --line: #2b2753;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { overflow-x: hidden; }
+    body {
+      font-family: 'Poppins', 'Inter', system-ui, Arial, sans-serif;
+      margin: 0;
+      color: var(--text);
+      background: linear-gradient(180deg, var(--bg-start), var(--bg-end));
+      min-height: 100dvh;
+      display:flex;
+      flex-direction:column;
+      width:100%;
+    }
+    .wrap { flex:1; width:100%; margin: 0; padding: 16px 16px 24px; display:flex; flex-direction:column; gap:16px; }
+    h1 { font-size: 30px; margin: 0 0 10px; letter-spacing: 0.4px; }
+    .status { display:flex; align-items:center; gap:8px; color: var(--muted); font-size: 14px; margin-bottom: 14px; }
+    .dot { width:10px; height:10px; border-radius:50%; background:#ff5c5c; }
+    .dot.on { background:#25ff9b; }
+    .card { position:relative; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 18px; box-shadow: 0 8px 24px rgba(0,0,0,.24); display:flex; flex-direction:column; gap:18px; }
+    .row { display: flex; gap: 16px; }
+    .btn { padding: 12px 20px; border-radius: 15px; border: 1px solid transparent; background: var(--accent); color: #fff; cursor: pointer; transition: transform .08s ease, box-shadow .15s ease, filter .15s ease; box-shadow: 0 2px 10px rgba(0,0,0,.18); text-transform: uppercase; font-weight:700; letter-spacing:.5px; }
+    .btn:hover { filter: brightness(.98); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,.24); }
+    .btn:disabled { opacity:.55; cursor:not-allowed; filter: grayscale(.3); }
+    .themeToggle { display:flex; gap:8px; align-items:center; justify-content:flex-end; }
+    .theme-toggle { position: relative; width:56px; height:28px; display:inline-block; cursor:pointer; }
+    .theme-toggle .slider { position:absolute; inset:0; border-radius:999px; border:1px solid var(--line); transition: all 0.4s ease-in-out; box-shadow: 0 0 12px rgba(0,0,0,.25); }
+    .theme-toggle .slider::before { content:""; position:absolute; top:2px; left:2px; width:24px; height:24px; background:#fff; border-radius:50%; transition: all 0.4s ease-in-out; box-shadow: 0 2px 6px rgba(0,0,0,.25); }
+    #themeCheckbox:checked + label.theme-toggle .slider::before { transform: translateX(24px); }
+    .chat-hero-title { font-size:2.2rem; font-weight:700; }
+    .chat-hero-sub { font-size:1rem; color:var(--muted); }
+    .button-container { position: relative; }
+    .button-container::before,
+    .button-container::after {
+      content:"";
+      position:absolute;
+      bottom:0;
+      left:50%;
+      width:6px;
+      height:15px;
+      border-radius:50%;
+      animation: flameRise 1.5s infinite ease-in-out;
+      opacity:.8;
+      transform: translateX(-50%);
+    }
+    body.light-mode .button-container::before,
+    body.light-mode .button-container::after { background: linear-gradient(to top, #ffaa00, #ff3300); }
+    body.dark-mode .button-container::before,
+    body.dark-mode .button-container::after { background: linear-gradient(to top, #330066, #6600ff); }
+    ul { margin: 8px 0 16px 20px; padding:0; color:var(--text); }
+    ul li { margin-bottom:6px; line-height:1.5; }
+
+    :root { --transition: 0.6s ease-in-out; }
+    body { transition: background var(--transition), color var(--transition); }
+
+    body.dark-mode {
+      --bg-start: #2b004f;
+      --bg-end: #0b001f;
+      --card: rgba(20, 12, 40, 0.55);
+      --accent: #2200aa;
+      --accent-2: #5d3bff;
+      --text: #f5f5f5;
+      --muted: #bfbad9;
+      --line: rgba(110, 90, 190, 0.35);
+    }
+
+    body.light-mode {
+      --bg-start: #ff6a00;
+      --bg-end: #cc3300;
+      --card: rgba(255, 255, 255, 0.65);
+      --accent: #b30000;
+      --accent-2: #ffaa00;
+      --text: #ff0000;
+      --muted: #ffe1c9;
+      --line: rgba(255, 180, 120, 0.55);
+    }
+
+    body.light-mode,
+    body.light-mode .wrap,
+    body.light-mode .card,
+    body.light-mode .row,
+    body.light-mode .chat-hero-title,
+    body.light-mode .chat-hero-sub,
+    body.light-mode ul,
+    body.light-mode li { color: var(--text); }
+    body.light-mode .theme-toggle .slider { background: linear-gradient(90deg, #ff9900, #cc3300); box-shadow: 0 0 12px rgba(255,140,60,.45); }
+    body.dark-mode .theme-toggle .slider { background: linear-gradient(90deg, #3a00b3, #0044ff); box-shadow: 0 0 12px rgba(120,100,255,.45); }
+
+    .pricing-grid { display:flex; flex-wrap:wrap; gap:16px; }
+    .pricing-card { flex:1; min-width:260px; }
+
+    .flames { position: fixed; left:0; right:0; bottom:0; height:180px; pointer-events:none; z-index:0; overflow:hidden; }
+    .flame { position:absolute; bottom:-20px; width:60px; height:120px; background: radial-gradient(50% 60% at 50% 60%, rgba(40,0,60,.45), transparent 70%); filter: blur(6px); animation: rise 6s infinite ease-in-out; opacity:.7; }
+    .flame.f2 { width:80px; height:140px; background: radial-gradient(50% 60% at 50% 60%, rgba(90,40,160,.28), transparent 70%); animation-duration:7.5s; animation-delay:.6s; }
+    .flame.f3 { width:50px; height:110px; background: radial-gradient(50% 60% at 50% 60%, rgba(140,90,220,.18), transparent 70%); animation-duration:5.5s; animation-delay:.3s; }
+    body.light-mode .flame { background: radial-gradient(50% 60% at 50% 60%, rgba(255,170,0,.35), transparent 70%); }
+    body.light-mode .flame.f2 { background: radial-gradient(50% 60% at 50% 60%, rgba(255,120,0,.25), transparent 70%); }
+    body.light-mode .flame.f3 { background: radial-gradient(50% 60% at 50% 60%, rgba(255,80,0,.18), transparent 70%); }
+    .flame:nth-child(1){left:8%}
+    .flame:nth-child(2){left:24%}
+    .flame:nth-child(3){left:42%}
+    .flame:nth-child(4){left:64%}
+    .flame:nth-child(5){left:82%}
+
+    .flame-particle { position:absolute; width:4px; height:10px; border-radius:50%; filter: blur(2px); animation: flameRise 2s infinite ease-in-out; }
+    body.light-mode .flame-particle { background: linear-gradient(to top, #ff6600, #ff3300); }
+    body.dark-mode .flame-particle { background: linear-gradient(to top, #4400aa, #6600ff); }
+
+    @keyframes flameRise {
+      0% { transform: translateY(0) scale(1); opacity: .9; }
+      50% { opacity: 1; }
+      100% { transform: translateY(-30px) scale(.5); opacity: 0; }
+    }
+
+    @keyframes rise {
+      0%{transform:translateY(20px) scale(.9);opacity:0}
+      15%{opacity:.7}
+      50%{transform:translateY(-40px) scale(1.04)}
+      100%{transform:translateY(-120px) scale(.96);opacity:0}
+    }
+
+    @media (max-width: 768px) {
+      .wrap { padding: 16px 12px 28px; }
+      .card { padding: 16px; }
+      .chat-hero-title { font-size:1.8rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="flames" aria-hidden="true">
+    <div class="flame"></div>
+    <div class="flame f2"></div>
+    <div class="flame f3"></div>
+    <div class="flame"></div>
+    <div class="flame f2"></div>
+  </div>
+  <div class="wrap">
+    <h1 style="display:none;">Draco Pro</h1>
+    <div class="card" style="max-width:1080px; margin:0 auto;">
+      <div class="row" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+        <div style="font-size:18px; font-weight:700; letter-spacing:0.6px;">DRACO PRO</div>
+        <div class="themeToggle">
+          <div style="font-weight:600;">Theme</div>
+          <div class="toggleSwitch" style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="themeCheckbox" style="position:absolute; opacity:0; width:0; height:0;" />
+            <label for="themeCheckbox" class="theme-toggle" aria-label="Toggle theme">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="chat-hero-title" style="text-align:center;">🔥 Draco Pro — Local Voice Assistant</div>
+      <div class="chat-hero-sub" style="text-align:center;">(Only runs on Windows)</div>
+      <div style="text-align:center; color:var(--muted); line-height:1.6;">
+        Unlock a blazing-fast, offline-first voice assistant built for Windows power users. Automate your workflow, control your PC, and get instant answers across more than 100 commands.
+      </div>
+    </div>
+
+    <div class="pricing-grid" style="max-width:1080px; margin:0 auto;">
+      <div class="card pricing-card" style="flex:1;">
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div style="font-size:22px; font-weight:700;">Draco Pro — ₹99</div>
+          <div style="color:var(--muted); font-size:14px;">Full local voice assistant with system automation</div>
+          <ul>
+            <li>Windows-only local execution (fast, private, offline-first)</li>
+            <li>100+ ready-to-use commands with voice triggers</li>
+            <li>System automation, notes, reminders, todos, and music control</li>
+          </ul>
+          <div class="button-container"><button class="btn" id="buyProPricingBtn" style="width:100%;">Buy Draco Pro</button></div>
+        </div>
+      </div>
+      <div class="card pricing-card" style="flex:1;">
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <div style="font-size:22px; font-weight:700;">Draco Custom — ₹149</div>
+          <div style="color:var(--muted); font-size:14px;">User chooses which commands to include</div>
+          <ul>
+            <li>Tailor Draco to match your exact workflow</li>
+            <li>Pick any combination of automation, productivity, or fun features</li>
+            <li>Perfect for students, coders, office pros, gamers, and creators</li>
+          </ul>
+          <div class="button-container"><button class="btn" id="buyCustomPricingBtn" style="width:100%;">Buy Draco Custom</button></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="buy-pro" style="max-width:1080px; margin:0 auto;">
+      <div style="font-size:20px; font-weight:700;">Full Features — Draco Pro</div>
+      <div style="display:flex; flex-direction:column; gap:18px;">
+        <div>
+          <h3 style="margin:0 0 8px;">Core Features</h3>
+          <ul>
+            <li>Quick Math Solver plus unit conversions for currency, distance, temperature, and more</li>
+            <li>Weather lookup with 5–7 day forecasts and latest news headlines</li>
+            <li>Time &amp; date announcements, battery percentage, and CPU/RAM usage at a glance</li>
+            <li>System status overview to keep Windows performance in check</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px;">Text Utilities</h3>
+          <ul>
+            <li>Create, list, search, edit, and delete voice notes hands-free</li>
+            <li>Set reminders and timers, start or stop the stopwatch, and manage todos end-to-end</li>
+            <li>Clipboard reading and quick text capture for productivity flows</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px;">Pro Features</h3>
+          <ul>
+            <li>Windows-only local voice assistant built for speed, privacy, and offline-first use</li>
+            <li>100+ commands covering automation, productivity, and entertainment scenarios</li>
+            <li>System automation spanning music, screenshots, web search, file work, and more</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px;">System Control</h3>
+          <ul>
+            <li>Take screenshots (standard or annotated) and manage display or volume levels</li>
+            <li>Sleep, lock, shut down, or restart your PC instantly</li>
+            <li>Toggle Wi‑Fi or Bluetooth, check connectivity status, and switch dark/light mode</li>
+            <li>Clean temporary files, clear clipboard, show active ports, list processes, and kill tasks</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px;">Apps &amp; Files</h3>
+          <ul>
+            <li>List files globally or in specific folders, find any file by name, and generate text files</li>
+            <li>Create DOCX research documents, open desktop apps, and launch favorite websites</li>
+            <li>Play your local music library, choose specific songs, pause, skip, or stop playback</li>
+            <li>Check open apps and browser tabs, then close them with a single command</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px;">Text Utilities</h3>
+          <ul>
+            <li>Summarize text or full files in short, medium, or detailed formats</li>
+            <li>Shorten, lengthen, compare, or merge documents on demand</li>
+            <li>Translate text across languages and perform instant spell checks</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px;">Developer Tools</h3>
+          <ul>
+            <li>Show or clear system logs to keep workflows stable</li>
+            <li>Run essential diagnostics such as <code>ipconfig</code>, <code>ping google.com</code>, and <code>tasklist</code></li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px;">Fun Commands</h3>
+          <ul>
+            <li>Ask Draco to tell a joke, share a random fact, or deliver a motivation boost</li>
+            <li>Flip a coin or roll a dice for quick decisions</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px;">Research</h3>
+          <ul>
+            <li>Perform DuckDuckGo web searches, image searches, and meme hunts</li>
+            <li>Use GPT-style chat for “Tell me about ___” explorations and instant definitions</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px;">Communication</h3>
+          <ul>
+            <li>Send emails, check unread inbox items, and reply to the last email</li>
+            <li>Trigger WhatsApp messaging with pre-filled text and reuse clipboard content</li>
+          </ul>
+        </div>
+        <div>
+          <h3 style="margin:0 0 8px;">Shell Commands</h3>
+          <ul>
+            <li>Execute Windows shell commands hands-free for rapid troubleshooting</li>
+            <li>Chain custom automation flows that blend voice triggers with CLI tasks</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="buy-custom" style="max-width:1080px; margin:0 auto;">
+      <div style="font-size:20px; font-weight:700; text-align:center;">Choose Your Power Pack</div>
+      <div style="display:flex; flex-direction:column; gap:12px; color:var(--muted); text-align:center;">
+        <div><strong style="color:var(--text);">DRACO PRO — ₹99</strong><br/>100+ commands · System automation · Notes &amp; reminders · Music &amp; screenshots · Web &amp; file tools · Text intelligence · Developer workflows · WhatsApp &amp; Email automation.</div>
+        <div><strong style="color:var(--text);">DRACO CUSTOM — ₹149</strong><br/>You decide the toolkit: pick any mix of core features, automation, productivity, music, screenshots, developer tools, fun commands, and communication add-ons.</div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:12px; text-align:center;">
+        <small style="color:var(--muted);">Ready to upgrade? Reach out on your favorite channel.</small>
+        <div class="row" style="flex-direction:column; gap:10px; max-width:320px; margin:0 auto;">
+          <div class="button-container"><button class="btn" id="contactBuyBtn" style="width:100%;">BUY DRACO PRO</button></div>
+          <div class="button-container"><button class="btn" id="contactWhatsappBtn" style="width:100%;">WHATSAPP</button></div>
+          <div class="button-container"><button class="btn" id="contactInstagramBtn" style="width:100%;">INSTAGRAM</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const THEME_KEY = 'draco-theme';
+    const themeCheckbox = document.getElementById('themeCheckbox');
+    function applyTheme(theme){
+      document.body.classList.remove('light-mode','dark-mode');
+      document.body.classList.add(theme);
+      try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+      if (themeCheckbox) themeCheckbox.checked = (theme === 'light-mode');
+    }
+    const savedTheme = (function(){ try { return localStorage.getItem(THEME_KEY); } catch (e) { return null; } })();
+    applyTheme(savedTheme || 'light-mode');
+    if (themeCheckbox) {
+      themeCheckbox.addEventListener('change', () => {
+        const next = themeCheckbox.checked ? 'light-mode' : 'dark-mode';
+        applyTheme(next);
+      });
+    }
+
+    const buyProPricingBtn = document.getElementById('buyProPricingBtn');
+    const buyCustomPricingBtn = document.getElementById('buyCustomPricingBtn');
+    if (buyProPricingBtn) {
+      buyProPricingBtn.onclick = () => { window.location.hash = 'buy-pro'; };
+    }
+    if (buyCustomPricingBtn) {
+      buyCustomPricingBtn.onclick = () => { window.location.hash = 'buy-custom'; };
+    }
+
+    const contactBuyBtn = document.getElementById('contactBuyBtn');
+    const contactWhatsappBtn = document.getElementById('contactWhatsappBtn');
+    const contactInstagramBtn = document.getElementById('contactInstagramBtn');
+    const WHATSAPP_URL = 'https://wa.me/91XXXXXXXXXX?text=Hi%2C%20I%20want%20Draco%20Pro';
+    const INSTAGRAM_URL = 'https://www.instagram.com/YOUR_ID/?message=Hi%20I%20want%20Draco%20Pro';
+    if (contactBuyBtn) {
+      contactBuyBtn.onclick = () => { window.location.href = '#buy-pro'; };
+    }
+    if (contactWhatsappBtn) {
+      contactWhatsappBtn.onclick = () => { window.open(WHATSAPP_URL, '_blank', 'noopener,noreferrer'); };
+    }
+    if (contactInstagramBtn) {
+      contactInstagramBtn.onclick = () => { window.open(INSTAGRAM_URL, '_blank', 'noopener,noreferrer'); };
+    }
+
+    function spawnFlames(container){
+      for(let i=0;i<6;i++){
+        const p = document.createElement('div');
+        p.className = 'flame-particle';
+        p.style.left = (20 + Math.random()*60) + '%';
+        p.style.bottom = (Math.random()*6) + 'px';
+        p.style.animationDelay = (Math.random()*1.5) + 's';
+        p.style.opacity = 0.6 + Math.random()*0.4;
+        container.style.overflow = 'visible';
+        container.appendChild(p);
+      }
+    }
+    document.querySelectorAll('.button-container').forEach(spawnFlames);
+  </script>
+</body>
+</html>

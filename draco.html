@@ -369,18 +369,11 @@
           </div>
         </div>
         <div class="card" style="margin-top:10px; padding:12px;">
-          <div style="font-weight:600; font-size:13px; margin-bottom:6px;">Account</div>
-          <div id="authStatus" style="font-size:12px; color:var(--muted); margin-bottom:6px;">Guest – chats not saved</div>
-          <div class="input" style="margin-bottom:8px; padding:8px 10px;">
-            <input id="loginEmail" type="text" placeholder="Enter email" style="font-size:13px;" />
-          </div>
-          <div class="input" style="margin-bottom:8px; padding:8px 10px;">
-            <input id="loginPassword" type="password" placeholder="Password" style="font-size:13px;" />
-          </div>
-          <div class="row" style="gap:8px; flex-wrap:wrap;">
-            <button class="btn" id="signupBtn" style="flex:1; padding:8px 10px; font-size:12px;">Sign Up + Verify</button>
-            <button class="btn" id="loginBtn" style="flex:1; padding:8px 10px; font-size:12px;">Login</button>
-            <button class="btn" id="logoutBtn" style="flex:1; padding:8px 10px; font-size:12px; display:none;">Logout</button>
+          <div style="font-weight:600; font-size:13px; margin-bottom:6px;">Draco Pro Access</div>
+          <div class="row" style="flex-direction:column; gap:8px;">
+            <div class="button-container"><button class="btn" id="buyProBtn" style="width:100%; padding:8px 10px; font-size:12px;">BUY DRACO PRO</button></div>
+            <div class="button-container"><button class="btn" id="whatsappBtn" style="width:100%; padding:8px 10px; font-size:12px;">WHATSAPP</button></div>
+            <div class="button-container"><button class="btn" id="instagramBtn" style="width:100%; padding:8px 10px; font-size:12px;">INSTAGRAM</button></div>
           </div>
         </div>
         <div class="sideActions">
@@ -500,15 +493,12 @@
     const statusText = document.getElementById('statusText');
     const chatHero = document.getElementById('chatHero');
     const heroGreeting = document.getElementById('heroGreeting');
-    const loginEmail = document.getElementById('loginEmail');
-    const loginPassword = document.getElementById('loginPassword');
-    const signupBtn = document.getElementById('signupBtn');
-    const loginBtn = document.getElementById('loginBtn');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const authStatus = document.getElementById('authStatus');
     const mobileMenuBtn = document.getElementById('mobileMenuBtn');
     const sideOverlay = document.getElementById('sideOverlay');
     const sideCloseBtn = document.getElementById('sideCloseBtn');
+    const buyProBtn = document.getElementById('buyProBtn');
+    const whatsappBtn = document.getElementById('whatsappBtn');
+    const instagramBtn = document.getElementById('instagramBtn');
     // Error banner helpers (moved from top)
     const errorBanner = document.getElementById('errorBanner');
     const errorText = document.getElementById('errorText');
@@ -528,8 +518,20 @@
     const allButtons = ()=> Array.from(document.querySelectorAll('button.btn'));
     function setBusy(on){ allButtons().forEach(b=> b.disabled = !!on); }
 
+    const WHATSAPP_URL = 'https://wa.me/91XXXXXXXXXX?text=Hi%2C%20I%20want%20Draco%20Pro';
+    const INSTAGRAM_URL = 'https://www.instagram.com/YOUR_ID/?message=Hi%20I%20want%20Draco%20Pro';
+    if (buyProBtn) {
+      buyProBtn.onclick = () => { window.location.href = 'draco_pro.html'; };
+    }
+    if (whatsappBtn) {
+      whatsappBtn.onclick = () => { window.open(WHATSAPP_URL, '_blank', 'noopener,noreferrer'); };
+    }
+    if (instagramBtn) {
+      instagramBtn.onclick = () => { window.open(INSTAGRAM_URL, '_blank', 'noopener,noreferrer'); };
+    }
+
     let socket = null;
-    let user = { logged_in: false, email: null, profile: {} };
+    let user = { logged_in: false, profile: {} };
     let historyItems = [];
     let chatsList = [];
     try {
@@ -580,23 +582,6 @@
         <div><strong>Hobbies:</strong> ${hobbies}</div>
         <div><strong>Favorite Subject:</strong> ${fav}</div>
       `;
-    }
-
-    function refreshAuthUI() {
-      if (!authStatus || !loginEmail || !loginBtn || !logoutBtn) return;
-      if (user && user.logged_in) {
-        const verified = user.profile && user.profile.verified;
-        authStatus.textContent = (verified ? 'Verified: ' : 'Signed in: ') + (user.email || '');
-        loginEmail.value = user.email || '';
-        loginBtn.style.display = 'none';
-        logoutBtn.style.display = 'inline-block';
-      } else {
-        authStatus.textContent = 'Guest – chats not saved';
-        loginEmail.value = '';
-        if (loginPassword) loginPassword.value = '';
-        loginBtn.style.display = 'inline-block';
-        logoutBtn.style.display = 'none';
-      }
     }
 
     function renderHistory() {
@@ -694,18 +679,16 @@
             const gd = await gp.json();
             if (gd && gd.ok) { user.profile = gd.profile || {}; renderProfile(); }
           } catch (e) {}
-          refreshAuthUI();
           return;
         }
         if (heroGreeting) {
-          const name = (user.profile && user.profile.name) || user.email || 'friend';
+          const name = (user.profile && user.profile.name) || 'friend';
           heroGreeting.textContent = 'Good to see you, ' + name + '.';
         }
-        appendItem('Signed in as ' + user.email, 'bot');
+        appendItem('Draco Pro sync connected.', 'bot');
         renderProfile();
         await loadHistory();
         await maybeRunOnboarding();
-        refreshAuthUI();
       } catch (e) { /* ignore */ }
     }
 
@@ -721,7 +704,7 @@
           try {
             const err = await h.json();
             if (err && err.error === 'not_verified') {
-              appendItem('Verify your email to use saved chats. Your current session is guest-only.', 'bot');
+              appendItem('Draco Pro cloud sync is unavailable. Staying in guest mode for now.', 'bot');
               return;
             }
           } catch (e) {}
@@ -731,7 +714,7 @@
         const d = await h.json();
         if (!d.ok) {
           if (d.error === 'not_verified') {
-            appendItem('Verify your email to use saved chats.', 'bot');
+            appendItem('Draco Pro upgrade is required for saved chats.', 'bot');
           }
           return;
         }
@@ -742,7 +725,7 @@
             if (dl && dl.ok) {
               chatsList = dl.chats || [];
             } else if (dl && dl.error === 'not_verified') {
-              appendItem('Verify your email to see your saved chat list.', 'bot');
+              appendItem('Draco Pro upgrade unlocks saved chat lists.', 'bot');
             }
           } catch (e) {}
         }
@@ -931,15 +914,13 @@
       qaCloseBtn.onclick = () => { closeQAModal(); };
     }
 
-    // Login, signup, and logout are wired from the Firebase module script
-
     const newChatBtn = document.getElementById('newChatBtn');
     const clearChatBtn = document.getElementById('clearChatBtn');
 
     if (newChatBtn) {
       newChatBtn.onclick = async () => {
         if (!user || !user.logged_in) {
-          appendItem('Sign in with an email to create saved chats.', 'bot');
+          appendItem('Draco Pro is required to create saved chats.', 'bot');
           return;
         }
         try {
@@ -1214,112 +1195,6 @@
       if (e.altKey && (e.key.toLowerCase() === 'd')) { e.preventDefault(); const t = (document.getElementById('genTopicSide').value||'').trim(); if (t) sendCommand('generate doc on ' + t); }
       if (e.altKey && (e.key.toLowerCase() === 'f')) { e.preventDefault(); if (instructionEl) instructionEl.value = 'flashcards'; uploadBtn && uploadBtn.click(); }
     });
-  </script>
-
-  <script type="module">
-    import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-app.js';
-    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification } from 'https://www.gstatic.com/firebasejs/12.6.0/firebase-auth.js';
-
-    const firebaseConfig = {
-      apiKey: 'AIzaSyBCz_yNXx3uKX7DM6zZj6_bjtFgnfcpZmY',
-      authDomain: 'draco-chat.firebaseapp.com',
-      projectId: 'draco-chat',
-      storageBucket: 'draco-chat.firebasestorage.app',
-      messagingSenderId: '321216180142',
-      appId: '1:321216180142:web:296e734bd9922e3e62223f',
-      measurementId: 'G-29PYB7KRL0'
-    };
-
-    const appFb = initializeApp(firebaseConfig);
-    const auth = getAuth(appFb);
-
-    const loginEmailEl = document.getElementById('loginEmail');
-    const loginPasswordEl = document.getElementById('loginPassword');
-    const signupBtnEl = document.getElementById('signupBtn');
-    const loginBtnEl = document.getElementById('loginBtn');
-    const logoutBtnEl = document.getElementById('logoutBtn');
-
-    async function syncFirebaseUserToBackend(firebaseUser){
-      if (!firebaseUser) return;
-      try {
-        const idToken = await firebaseUser.getIdToken(true);
-        const resp = await fetch('/auth/firebase_email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idToken })
-        });
-        const data = await resp.json();
-        if (!resp.ok || !data.ok) {
-          appendItem('Sign-in failed on server: ' + (data.error || 'error'), 'bot');
-          return;
-        }
-        appendItem('Signed in as ' + (data.email || firebaseUser.email) + '. Reloading to sync chats…', 'bot');
-        try { window.location.reload(); } catch (e) {}
-      } catch (e) {
-        appendItem('Error syncing with server: ' + (e.message || 'error'), 'bot');
-      }
-    }
-
-    if (signupBtnEl) {
-      signupBtnEl.onclick = async () => {
-        const email = (loginEmailEl && loginEmailEl.value || '').trim().toLowerCase();
-        const password = (loginPasswordEl && loginPasswordEl.value) || '';
-        if (!email || email.indexOf('@') === -1) {
-          appendItem('Enter a valid email.', 'bot');
-          return;
-        }
-        if (!password || password.length < 6) {
-          appendItem('Use a password with at least 6 characters.', 'bot');
-          return;
-        }
-        try {
-          const cred = await createUserWithEmailAndPassword(auth, email, password);
-          await sendEmailVerification(cred.user);
-          appendItem('Account created. I\'ve sent a verification email to ' + email + '. Please verify, then log in.', 'bot');
-        } catch (e) {
-          appendItem('Sign-up error: ' + (e.code || e.message || 'error'), 'bot');
-        }
-      };
-    }
-
-    if (loginBtnEl) {
-      loginBtnEl.onclick = async () => {
-        const email = (loginEmailEl && loginEmailEl.value || '').trim().toLowerCase();
-        const password = (loginPasswordEl && loginPasswordEl.value) || '';
-        if (!email || email.indexOf('@') === -1) {
-          appendItem('Enter a valid email.', 'bot');
-          return;
-        }
-        if (!password) {
-          appendItem('Enter your password.', 'bot');
-          return;
-        }
-        try {
-          const cred = await signInWithEmailAndPassword(auth, email, password);
-          const fbUser = cred.user;
-          if (!fbUser.emailVerified) {
-            appendItem('Your email is not verified yet. Check your inbox and click the verification link.', 'bot');
-            return;
-          }
-          await syncFirebaseUserToBackend(fbUser);
-        } catch (e) {
-          appendItem('Login error: ' + (e.code || e.message || 'error'), 'bot');
-        }
-      };
-    }
-
-    if (logoutBtnEl) {
-      logoutBtnEl.onclick = async () => {
-        try {
-          await fetch('/logout', { method: 'POST' });
-        } catch (e) {}
-        try {
-          await auth.signOut();
-        } catch (e) {}
-        appendItem('Switched to guest mode. Chats will not be saved.', 'bot');
-        try { window.location.reload(); } catch (e) {}
-      };
-    }
   </script>
 
   </body>
