@@ -1,233 +1,116 @@
-import os
 import re
 import time
 import random
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any, List
 
-# Simple in-memory context per session (can be expanded)
+# Session context
 class ChatContext:
     def __init__(self):
-        self.last_topic: str = ""
-        self.last_subject: str = ""
-        self.recent_intents: List[str] = []
+        self.last_topic = ""
+        self.last_intents = []
         self.ts = time.time()
 
-    def update_intent(self, intent: str):
-        self.recent_intents.append(intent)
-        if len(self.recent_intents) > 20:
-            self.recent_intents.pop(0)
+    def add_intent(self, intent: str):
+        self.last_intents.append(intent)
+        if len(self.last_intents) > 25:
+            self.last_intents.pop(0)
         self.ts = time.time()
 
-# Patterns for rule-based intents
+# Patterns
 PATTERNS = {
-    "greet": re.compile(r"\b(hi|hello|hey|yo|good\s*(morning|afternoon|evening))\b", re.I),
-    "how_are_you": re.compile(r"\b(how\s*(are|r)\s*(you|u))\b", re.I),
+    "greet": re.compile(r"\b(hi|hello|hey|yo|sup)\b", re.I),
+    "how_are_you": re.compile(r"\b(how\s*(are|r)\s*you)\b", re.I),
     "who_are_you": re.compile(r"\b(who\s*are\s*you|what\s*is\s*your\s*name)\b", re.I),
-    # capture user info
-    "set_name": re.compile(r"\b(my\s*name\s*is)\s+([A-Za-z][\w\-']{1,40})\b", re.I),
-    "set_hobbies": re.compile(r"\b(i\s*(like|love|enjoy))\s+(.+)\b", re.I),
-    "set_fav_subject": re.compile(r"\b(my\s*fav(ou)?rite\s*subject\s*is)\s+([A-Za-z][\w\- ]{1,40})\b", re.I),
-    # emotion / tone
-    "sad": re.compile(r"\b(i'?m|i am)\s*(sad|upset|down|depressed|unhappy|low)\b", re.I),
-    "excited": re.compile(r"\b(i'?m|i am)\s*(excited|thrilled|pumped|stoked|happy)\b", re.I),
-    # homework/assignment helpers
-    "ask_math": re.compile(r"\b(math|algebra|geometry|calculus|trigonometry)\b", re.I),
-    "ask_physics": re.compile(r"\b(physics|mechanics|optics|thermo|electricity)\b", re.I),
-    "ask_python": re.compile(r"\b(python|variable|function|loop|class|list|dict|tuple)\b", re.I),
+
+    "sad": re.compile(r"\b(i'?m|i am)\s*(sad|down|upset|low)\b", re.I),
+    "happy": re.compile(r"\b(i'?m|i am)\s*(happy|excited|pumped|ready)\b", re.I),
+
+    "set_name": re.compile(r"\bmy\s*name\s*is\s+([A-Za-z][\w\-']{1,40})\b", re.I),
+    "set_hobby": re.compile(r"\b(i\s*(like|love|enjoy))\s+(.+)\b", re.I),
 }
 
-HOMEWORK_TEMPLATES = {
-    "math": (
-        "Math help",
-        [
-            "Identify knowns and unknowns.",
-            "Write the formula (e.g., quadratic: ax^2 + bx + c = 0).",
-            "Substitute values and solve step-by-step.",
-            "Check your units and solution by plugging back.",
-        ],
-    ),
-    "physics": (
-        "Physics help",
-        [
-            "Draw a quick diagram and set a coordinate system.",
-            "List forces or energy forms involved.",
-            "Pick the principle: F=ma, Work-Energy, Momentum, etc.",
-            "Solve symbolically, then plug numbers, include units.",
-        ],
-    ),
-    "python": (
-        "Python help",
-        [
-            "Break the problem into functions.",
-            "Use clear variable names and comments.",
-            "Test with small inputs and print intermediate states.",
-            "Look up errors and read tracebacks to pinpoint lines.",
-        ],
-    ),
-}
+# Personality lines
+GREET_LINES = [
+    "Yo! What's good bro?",
+    "Heyy! Draco here — bol kya scene hai?",
+    "Hi! Batao bro, aaj kya banaye/solve kare?"
+]
 
+HOW_ARE_YOU_LINES = [
+    "Mast hu bro, full power! Tu bata?",
+    "All good here! Aaj kya grind kare?",
+    "OP feel bro — ready ho main. Tu bol!"
+]
 
-def _comma_list(text: str) -> List[str]:
-    parts = [p.strip(" .,!;:") for p in re.split(r",|and|&|\+", text, flags=re.I)]
+WHO_ARE_YOU_LINES = [
+    "Main hu Draco — tera apna AI bro, banaya by Aryan.",
+    "Draco present bro! Anime-style support ready.",
+    "Draco at your service — chalu kare kya?"
+]
+
+SAD_LINES = [
+    "Aye bro… chill. Tu akela nahi hai, main yaha hu.",
+    "Take a deep breath bro, sab theek ho jayega.",
+    "Abe tension mat le — tu strong hai. Bata kya hua?"
+]
+
+HAPPY_LINES = [
+    "Yehhh bro! Energy OP 🔥",
+    "Let's goooo! Aaj pura takeover karte!",
+    "Bro that hype >>> everything. Chalu bol!"
+]
+
+def _split_list(text):
+    parts = [p.strip() for p in re.split(r",|and|&|\+", text)]
     return [p for p in parts if p]
 
+# Main reply function
+def chat_reply(text: str, profile: Dict[str, Any], ctx: ChatContext) -> Dict[str, Any]:
 
-def personalize(base: str, profile: Dict[str, Any]) -> str:
-    name = (profile.get("name") or profile.get("Name") or "friend").strip()
-    return base.replace("friend", name)
-
-
-def extract_and_store_user_info(text: str, profile: Dict[str, Any]) -> Tuple[Dict[str, Any], str]:
-    """Return (updated_profile, acknowledgment_text or '')."""
     t = text.strip()
+
+    # Save name
     m = PATTERNS["set_name"].search(t)
     if m:
-        profile["name"] = m.group(2).strip().title()
-        return profile, f"Saved your name as {profile['name']}."
+        name = m.group(1).title()
+        profile["name"] = name
+        return {"text": f"Done bro! From now on I'll call you {name}."}
 
-    m = PATTERNS["set_fav_subject"].search(t)
+    # Save hobbies
+    m = PATTERNS["set_hobby"].search(t)
     if m:
-        profile["favorite_subject"] = m.group(4).strip().title()
-        return profile, f"Got it. Favorite subject set to {profile['favorite_subject']}."
-
-    m = PATTERNS["set_hobbies"].search(t)
-    if m:
-        items = _comma_list(m.group(3))
+        items = _split_list(m.group(3))
         if items:
             profile["hobbies"] = items
-            return profile, "Nice! I'll remember you like " + ", ".join(items) + "."
+            return {"text": f"Nice bro! I'll remember you like {', '.join(items)}."}
 
-    return profile, ""
+    # Greetings
+    if PATTERNS["greet"].search(t):
+        return {"text": random.choice(GREET_LINES)}
 
+    # How are you
+    if PATTERNS["how_are_you"].search(t):
+        return {"text": random.choice(HOW_ARE_YOU_LINES)}
 
-GREET_RESPONSES = [
-    "Hello friend! How can I help today?",
-    "Hey friend! What can I do for you?",
-    "Hi friend — ready when you are!",
-]
-HOW_ARE_YOU_RESPONSES = [
-    "I'm good — ready to help you, friend.",
-    "Doing great! How can I support you today, friend?",
-    "Feeling productive — what shall we tackle, friend?",
-]
-WHO_ARE_YOU_RESPONSES = [
-    "I'm Draco. Nice to meet you, friend!,Made by Aryan",
-    "Draco here — your friendly assistant, friend,Made by Aryan",
-    "I'm Draco — let's get things done, friend!,Made by Aryan",
-]
+    # Who are you
+    if PATTERNS["who_are_you"].search(t):
+        return {"text": random.choice(WHO_ARE_YOU_LINES)}
 
-EMPATHY_SAD = [
-    "I'm here for you, friend. Want to talk about it?",
-    "Sorry to hear that, friend. Let's take it one step at a time.",
-    "I care, friend. Do you want a small exercise or a break suggestion?",
-]
-ENERGETIC_HAPPY = [
-    "Love that energy, friend! Want to channel it into something fun?",
-    "Awesome! Let's ride that momentum, friend.",
-    "Heck yes! What shall we build next, friend?",
-]
+    # Sad emotional support
+    if PATTERNS["sad"].search(t):
+        return {"text": random.choice(SAD_LINES)}
 
-def small_talk(text: str, profile: Dict[str, Any]) -> str:
-    if PATTERNS["greet"].search(text):
-        return personalize(random.choice(GREET_RESPONSES), profile)
-    if PATTERNS["how_are_you"].search(text):
-        return personalize(random.choice(HOW_ARE_YOU_RESPONSES), profile)
-    if PATTERNS["who_are_you"].search(text):
-        return personalize(random.choice(WHO_ARE_YOU_RESPONSES), profile)
-    if PATTERNS["sad"].search(text):
-        return personalize(random.choice(EMPATHY_SAD), profile)
-    if PATTERNS["excited"].search(text):
-        return personalize(random.choice(ENERGETIC_HAPPY), profile)
-    return ""
+    # Happy vibe
+    if PATTERNS["happy"].search(t):
+        return {"text": random.choice(HAPPY_LINES)}
 
+    # Hobby-based response
+    if "draw" in t.lower() and "hobbies" in profile:
+        return {"text": f"Bro you like {profile['hobbies'][0]} — wanna draw something today?"}
 
-def personalize_followups(text: str, profile: Dict[str, Any]) -> str:
-    name = profile.get("name")
-    fav = profile.get("favorite_subject")
-    hobbies = profile.get("hobbies")
+    # Study based personalization
+    if "study" in t.lower() and "favorite_subject" in profile:
+        return {"text": f"Perfect bro! Let's study {profile['favorite_subject']}."}
 
-    if any(k in text.lower() for k in ["how's your day", "hows your day", "how is your day"]):
-        if name:
-            return f"How's your day, {name}?"
-        return "How's your day?"
-    if hobbies in text.lower() and hobbies:
-        return f"Do you want to do something like that today, {name or 'friend'}? I know you like {hobbies[0]}!"
-    if fav and fav.lower() in text.lower():
-        return f"I like {fav} too! Want a quick tip or a practice question?"
-    return ""
-
-
-def homework_assist(text: str) -> Tuple[str, List[str]]:
-    if PATTERNS["ask_math"].search(text):
-        return HOMEWORK_TEMPLATES["math"]
-    if PATTERNS["ask_physics"].search(text):
-        return HOMEWORK_TEMPLATES["physics"]
-    if PATTERNS["ask_python"].search(text):
-        return HOMEWORK_TEMPLATES["python"]
-    return "", []
-
-
-def _knowledge_path() -> str:
-    return os.path.join(os.getcwd(), "knowledge")
-
-
-def lookup_knowledge(keys: List[str]) -> str:
-    base = _knowledge_path()
-    out = []
-    for k in keys:
-        p = os.path.join(base, f"{k}.txt")
-        try:
-            if os.path.exists(p):
-                with open(p, "r", encoding="utf-8") as f:
-                    content = f.read().strip()
-                    if content:
-                        out.append(f"[{k.title()} Notes]\n" + content)
-        except Exception:
-            continue
-    return "\n\n".join(out)
-
-
-def chat_reply(text: str, profile: Dict[str, Any], ctx: ChatContext) -> Dict[str, Any]:
-    """Main entry. Returns a structured dict: {text, updated_profile?, title?, bullets?}.
-    No external calls, purely rule-based.
-    """
-    # First, capture user info if present
-    profile, ack = extract_and_store_user_info(text, profile)
-    if ack:
-        return {"text": ack, "updated_profile": profile}
-
-    # Small talk / basic Q&A
-    s = small_talk(text, profile)
-    if s:
-        return {"text": s}
-
-    # Personalized follow-ups
-    pf = personalize_followups(text, profile)
-    if pf:
-        return {"text": pf}
-
-    # Homework assist
-    title, bullets = homework_assist(text)
-    if title:
-        ctx.update_intent("homework")
-        # try to attach knowledge
-        keys = []
-        if title.lower().startswith("math"):
-            keys.append("math")
-        if title.lower().startswith("physics"):
-            keys.append("physics")
-        if title.lower().startswith("python"):
-            keys.append("python")
-        notes = lookup_knowledge(keys) if keys else ""
-        text_block = f"{title}:\n - " + "\n - ".join(bullets)
-        if notes:
-            text_block += "\n\n" + notes
-        return {"text": text_block, "title": title, "bullets": bullets}
-
-    # Contextual nudge if missing info
-    if "favorite subject" in text.lower() and not profile.get("favorite_subject"):
-        return {"text": "I don't know your favorite subject yet, can you tell me?"}
-
-    # Fallback → return empty so main.py fallback runs
+    # FINAL fallback (for things this file doesn't understand)
     return {"text": ""}
-
