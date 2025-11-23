@@ -1389,26 +1389,20 @@ def process_command(raw_cmd: str) -> str:
         else:
             return f"Command error: {err}"
 
-    # Rule-based chat engine (self-contained, personalized)
+   # Rule-based chat engine
     if draco_chat and isinstance(cmd, str) and cmd:
         user_email = get_logged_in_email()
         profile = get_user_profile(user_email) if user_email else memory.long
         try:
             out = draco_chat.chat_reply(raw_cmd, profile, chat_ctx)
             if isinstance(out, dict):
-                # persist profile if updated
-                if out.get("updated_profile") is not None:
-                    if user_email:
-                        set_user_profile(user_email, out["updated_profile"]) 
-                    else:
-                        # store minimal fields in memory fallback
-                        for k, v in out["updated_profile"].items():
-                            memory.set_pref(k, v)
                 text = str(out.get("text", ""))
-                if text:
+
+                # If Draco doesn't know → we fallback
+                if text and text not in ["I'm not sure about that.", "I am not sure about that"]:
                     speak(text)
                     return text
-        except Exception as e:
+        except:
             pass
     
    # FINAL FALLBACK
