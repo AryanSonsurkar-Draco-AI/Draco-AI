@@ -1423,13 +1423,19 @@ def process_command(raw_cmd: str) -> str:
 @app.route("/")
 def index():
     # Always show main app; login removed
-        return send_from_directory(".", "draco.html")
+    return send_from_directory(".", "draco.html")
+
+
+@app.route("/draco_pro")
+def draco_pro_page():
+    return send_from_directory(".", "draco_pro.html")
 
 
 @app.route("/guest")
 def guest_mode():
     # Guest mode (login removed) – just serve app
     return send_from_directory(".", "draco.html")
+
 
 @app.route("/me")
 def me():
