@@ -1389,7 +1389,7 @@ def process_command(raw_cmd: str) -> str:
         else:
             return f"Command error: {err}"
 
-   # Rule-based chat engine
+    # Rule-based chat engine
     if draco_chat and isinstance(cmd, str) and cmd:
         user_email = get_logged_in_email()
         profile = get_user_profile(user_email) if user_email else memory.long
@@ -1402,14 +1402,18 @@ def process_command(raw_cmd: str) -> str:
                 if text and text not in ["I'm not sure about that.", "I am not sure about that"]:
                     speak(text)
                     return text
-        except:
-            pass
-    
-   # FINAL FALLBACK
+
+        except Exception:
+            pass  # If chat engine fails, fallback will handle it
+
+
+# ------------------- FINAL FALLBACK --------------------
     try:
         reply = duckduck_fallback(cmd)  # pass the actual query
+
         if not reply or reply.strip() == "":
             reply = "Bro, DuckDuckGo se kuch useful nahi mila."
+
         speak(reply)
         return reply
 
