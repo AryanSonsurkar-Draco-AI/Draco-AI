@@ -803,7 +803,7 @@ def web_search_duckduckgo(query: str, limit: int = 3):
 def draco_ai(prompt):
     url = "https://openrouter.ai/api/v1/chat/completions"
 
-    API_KEY = "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"  # <-- apna key yaha daalna (mujhe mat bhejna)
+    API_KEY = "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"  
 
     headers = {
         "Authorization": f"Bearer {API_KEY}",
@@ -1301,17 +1301,17 @@ def process_command(raw_cmd: str) -> str:
             "Rishte mai hum tumhare baap lagte hai.",
             "Kaun bhauk raha hai , ye bata-meez.",
             "What if a girl propose you? In your dreams. ha ha ha ha ha ha.",
-            "Pahili furr, sat se nikal . Joke sunna hai tuze? Mai aajaau kya udhar."
-            "My code works… and I have no idea why."
-            "Why did the coder quit his job? Because he didn’t get arrays."
-            'What’s a programmer’s favourite hangout spot? The Foo Bar.'
-            "Ek ladka bola, “Mere paas dimaag hai.” Dimaag bola, “Main toh yahan tourist hoon.”"
-            "Ek aadmi bola, “Main gym jaa raha hoon.” Gym bola, “Jhooth bolta hai.”"
-            "Internet slow ho gaya… mera patience bhi slow ho gaya."
-            "Iron Man: “I am Iron Man.”Me: “I am tired man.”"
-            "Naruto says “Rasengan,” Itachi says “Mangekyo Sharingan,” and Sasuke says “Can we talk normally for one minute?”"
-            "Goku says “Kamehameha,” Vegeta says “Final Flash,” and Bulma says “Calm down both of you.”"
-            "Gojo says “Purple Attack,” and Geto says “You use that when you don’t want to talk.”"
+            "Pahili furr, sat se nikal . Joke sunna hai tuze? Mai aajaau kya udhar.",
+            "My code works… and I have no idea why.",
+            "Why did the coder quit his job? Because he didn’t get arrays.",
+            'What’s a programmer’s favourite hangout spot? The Foo Bar.',
+            "Ek ladka bola, “Mere paas dimaag hai.” Dimaag bola, “Main toh yahan tourist hoon.”",
+            "Ek aadmi bola, “Main gym jaa raha hoon.” Gym bola, “Jhooth bolta hai.”",
+            "Internet slow ho gaya… mera patience bhi slow ho gaya.",
+            "Iron Man: “I am Iron Man.”Me: “I am tired man.”",
+            "Naruto says “Rasengan,” Itachi says “Mangekyo Sharingan,” and Sasuke says “Can we talk normally for one minute?”",
+            "Goku says “Kamehameha,” Vegeta says “Final Flash,” and Bulma says “Calm down both of you.”",
+            "Gojo says “Purple Attack,” and Geto says “You use that when you don’t want to talk.”",
             "Rengoku says “Flame Breathing,” Inosuke says “Beast Breathing,” Tengen says “Sound Breathing,” and Tanjiro says “Guys relax.”"
         ]
         reply = random.choice(jokes)
