@@ -1389,7 +1389,7 @@ def process_command(raw_cmd: str) -> str:
         else:
             return f"Command error: {err}"
 
-    # Rule-based chat engine
+        # Rule-based chat engine
     if draco_chat and isinstance(cmd, str) and cmd:
         user_email = get_logged_in_email()
         profile = get_user_profile(user_email) if user_email else memory.long
@@ -1398,16 +1398,31 @@ def process_command(raw_cmd: str) -> str:
             if isinstance(out, dict):
                 text = str(out.get("text", ""))
 
-                # If Draco doesn't know → we fallback
-                if text and text not in ["I'm not sure about that.", "I am not sure about that"]:
+                # ------------------ FIXED UNKNOWN DETECTION ------------------
+                UNKNOWN_RESPONSES = [
+                    "i'm not sure about that",
+                    "i am not sure about that",
+                    "i’m not sure about that",
+                    "can you ask differently",
+                    "i'm not sure",
+                    "not sure about that",
+                    "i'm unsure",
+                    "i am unsure"
+                ]
+
+                low = text.strip().lower()
+
+                # If the model returns bullshit → skip it and fallback
+                if text and not any(unk in low for unk in UNKNOWN_RESPONSES):
                     speak(text)
                     return text
+                # --------------------------------------------------------------
 
         except Exception:
             pass  # If chat engine fails, fallback will handle it
 
 
-# ------------------- FINAL FALLBACK --------------------
+    # ------------------- FINAL FALLBACK --------------------
     try:
         reply = duckduck_fallback(cmd)  # pass the actual query
 
@@ -1421,6 +1436,7 @@ def process_command(raw_cmd: str) -> str:
         reply = "Bro, something went wrong. Please try again."
         speak(reply)
         return reply
+
     
 
 # ------------- Flask / SocketIO endpoints -------------
