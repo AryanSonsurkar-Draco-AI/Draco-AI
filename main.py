@@ -218,6 +218,45 @@ def _clear_current_chat(email: str):
 
 STOPWORDS = set("the a an and or to for in of on with at by from as be is are was were it this that these those i you he she we they them our your my mine ours yours their his her its about into than too very just can could should would will shall may might do does did not no yes ok please hey hi hello how what when where which who why".split())
 
+def clean_unicode(text: str) -> str:
+    """
+    Convert unicode text into safe latin-1 ASCII because FPDF can't encode unicode.
+    Anything unsupported is replaced safely.
+    """
+    if text is None:
+        return ""
+
+    # ensure it's a string
+    text = str(text)
+
+    # common replacements
+    replacements = {
+        "\u2018": "'", "\u2019": "'",         # curved single quotes
+        "\u201c": '"', "\u201d": '"',         # curved double quotes
+        "\u2026": "...",                      # ellipsis …
+        "\u2014": "-", "\u2013": "-",         # long dashes — –
+        "\u2022": "-",                        # bullet •
+        "\u00a0": " ",                         # non-breaking space
+        "\u2192": "->", "\u2190": "<-",       # arrows
+        "\u2191": "^",  "\u2193": "v",
+        "\u2713": "✓",                        # checkmark
+        "\u2020": "*", "\u2021": "*",         # dagger
+    }
+
+    for bad, rep in replacements.items():
+        text = text.replace(bad, rep)
+
+    # remove/replace any remaining characters not in latin-1
+    safe = []
+    for ch in text:
+        if ord(ch) <= 255:
+            safe.append(ch)
+        else:
+            safe.append("?")   # replace unsupported unicode
+
+    return "".join(safe)
+
+
 def _summarize_chat_name(items):
     # items: list of {who, text}
     texts = [x.get("text", "") for x in items if x.get("who") == "user"]
@@ -2051,164 +2090,164 @@ def _generate_pptx(title: str, bullets, max_sentences_per_slide: int = 4) -> str
 def _generate_pdf(title: str, paragraphs, sources=None) -> str:
     if not FPDF:
         raise RuntimeError("fpdf not installed.")
+
+    # Clean ALL text BEFORE pdf starts
+    title = clean_unicode(title)
+    paragraphs = [clean_unicode(str(p)) for p in paragraphs]
+    if sources:
+        sources = [clean_unicode(str(s)) for s in sources]
+
     class PDFReport(FPDF):
         def __init__(self, t: str):
             super().__init__()
             self.t = t
-            # theme colors (RGB)
             self.theme = random.choice([
-                {"accent": (10, 163, 127), "muted": (100, 100, 120)},   # teal
-                {"accent": (62, 99, 221), "muted": (110, 110, 140)},   # blue
-                {"accent": (242, 95, 58), "muted": (130, 110, 110)},   # coral
-                {"accent": (45, 55, 72), "muted": (110, 110, 120)},    # slate
+                {"accent": (10,163,127), "muted": (100,100,120)},
+                {"accent": (62,99,221), "muted": (110,110,140)},
+                {"accent": (242,95,58), "muted": (130,110,110)},
+                {"accent": (45,55,72), "muted": (110,110,120)},
             ])
-            self.section_links = []  # list of (text, link_id)
+            self.section_links = []
+
         def header(self):
             try:
                 self.set_font("Helvetica", "", 10)
                 self.set_text_color(100)
-                self.cell(0, 8, self.t, ln=1, align="C")
+                self.cell(0, 8, clean_unicode(self.t), ln=1, align="C")
                 self.set_draw_color(200)
                 self.set_line_width(0.2)
                 self.line(self.l_margin, self.get_y(), self.w - self.r_margin, self.get_y())
                 self.ln(2)
-            except Exception:
+            except:
                 pass
+
         def footer(self):
             try:
                 self.set_y(-12)
                 self.set_font("Helvetica", "", 9)
                 self.set_text_color(120)
                 self.cell(0, 10, f"Page {self.page_no()}", align="C")
-            except Exception:
+            except:
                 pass
+
     pdf = PDFReport(title)
-    pdf.set_margins(18, 16, 18)
+    pdf.set_margins(18,16,18)
     pdf.set_auto_page_break(auto=True, margin=18)
+
     try:
         pdf.set_title(title)
         pdf.set_author("Draco AI")
         pdf.set_subject("Generated Report")
-    except Exception:
+    except:
         pass
+
+    # COVER PAGE
     pdf.add_page()
     pdf.set_text_color(0)
     pdf.set_font("Helvetica", "B", 18)
     pdf.cell(0, 10, txt=title, ln=True, align="C")
+
     pdf.ln(2)
     try:
         now_str = datetime.datetime.now().strftime("%b %d, %Y")
         pdf.set_font("Helvetica", "", 11)
         pdf.set_text_color(80)
         pdf.cell(0, 8, txt=now_str, ln=True, align="C")
-    except Exception:
+    except:
         pass
+
     pdf.ln(6)
-    # Table of Contents placeholder page (will add after cover)
-    # Create TOC after building section links; we'll add content links now and come back
-    # Prepare section link ids
+
+    # Prepare sections
     section_link_ids = []
-    for idx, p in enumerate(paragraphs, 1):
+    for idx, _ in enumerate(paragraphs, 1):
         try:
             link_id = pdf.add_link()
-        except Exception:
+        except:
             link_id = None
         section_link_ids.append((f"Section {idx}", link_id))
 
-    # Add content pages with section headers and set link targets
-    pdf.set_text_color(0)
+    # CONTENT SECTIONS
     pdf.set_font("Helvetica", "", 12)
     for i, p in enumerate(paragraphs, 1):
-        # Section header
         pdf.set_font("Helvetica", "B", 14)
-        r,g,b = pdf.theme.get("accent", (0,0,0))
-        pdf.set_text_color(r, g, b)
+        r,g,b = pdf.theme["accent"]
+        pdf.set_text_color(r,g,b)
         header = f"Section {i}"
+
         y_before = pdf.get_y()
         pdf.cell(0, 8, txt=header, ln=True)
-        # set link target for this section at current position
+
         try:
             if section_link_ids[i-1][1] is not None:
                 pdf.set_link(section_link_ids[i-1][1], y=y_before, page=pdf.page_no())
-        except Exception:
+        except:
             pass
+
         pdf.set_text_color(0)
         pdf.set_font("Helvetica", "", 12)
-        pdf.multi_cell(0, 7, txt=str(p))
+        pdf.multi_cell(0, 7, txt=p)
         pdf.ln(2)
 
-    # Insert Table of Contents page after the cover page
+    # TABLE OF CONTENTS (auto fallback)
     try:
         pdf.set_auto_page_break(auto=True, margin=18)
-        # Remember current state
         saved_page = pdf.page
-        # Insert a page at position 2 (after cover)
         pdf.page = 1
         pdf._newpage("P")
         pdf.page = 2
-        pdf.set_text_color(0)
         pdf.set_font("Helvetica", "B", 16)
-        pdf.cell(0, 10, txt="Table of Contents", ln=True)
+        pdf.cell(0, 10, "Table of Contents", ln=True)
         pdf.ln(4)
         pdf.set_font("Helvetica", "", 12)
-        for (label, link_id) in section_link_ids:
-            if link_id is not None:
-                pdf.set_text_color(0, 0, 180)
+
+        for label, link_id in section_link_ids:
+            pdf.set_text_color(0,0,180)
+            try:
                 pdf.write(8, label, link=link_id)
-            else:
+            except:
                 pdf.set_text_color(0)
-                pdf.cell(0, 8, txt=label, ln=True)
+                pdf.cell(0, 8, label, ln=True)
             pdf.ln(2)
-        pdf.set_text_color(0)
-        # restore to last page to continue sources and save
+
         pdf.page = saved_page + 1
-    except Exception:
-        # If insertion unsupported, just add TOC at the end
-        try:
-            pdf.add_page()
-            pdf.set_text_color(0)
-            pdf.set_font("Helvetica", "B", 16)
-            pdf.cell(0, 10, txt="Table of Contents", ln=True)
-            pdf.ln(4)
-            pdf.set_font("Helvetica", "", 12)
-            for (label, link_id) in section_link_ids:
-                if link_id is not None:
-                    pdf.set_text_color(0, 0, 180)
-                    pdf.write(8, label, link=link_id)
-                else:
-                    pdf.set_text_color(0)
-                    pdf.cell(0, 8, txt=label, ln=True)
-                pdf.ln(2)
-            pdf.set_text_color(0)
-        except Exception:
-            pass
-    # Sources section (clickable links)
+    except:
+        # fallback TOC at end
+        pdf.add_page()
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.cell(0, 10, "Table of Contents", ln=True)
+        pdf.ln(4)
+        pdf.set_font("Helvetica", "", 12)
+        for label,_ in section_link_ids:
+            pdf.cell(0, 8, label, ln=True)
+            pdf.ln(2)
+
+    # SOURCES
     if sources:
         pdf.ln(4)
-        pdf.set_font("Helvetica", "B", 14)
         pdf.set_text_color(0)
-        pdf.cell(0, 10, txt="Sources", ln=True)
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.cell(0, 10, "Sources", ln=True)
+
         pdf.set_font("Helvetica", "", 11)
         for u in sources:
+            u = clean_unicode(u)
             try:
-                display = u
-                pdf.set_text_color(0, 0, 180)
-                pdf.write(6, display, link=u)
+                pdf.set_text_color(0,0,180)
+                pdf.write(6, u, link=u)
                 pdf.ln(6)
-            except Exception:
-                try:
-                    pdf.set_text_color(0)
-                    pdf.multi_cell(0, 6, txt=str(u))
-                except Exception:
-                    pass
+            except:
+                pdf.set_text_color(0)
+                pdf.multi_cell(0,6,txt=u)
+
         pdf.set_text_color(0)
+
     safe = "".join(ch for ch in title if ch.isalnum() or ch in (" ","_","-")).strip() or "report"
     name = f"{safe[:40].replace(' ','_')}_{int(time.time())}.pdf"
     path = os.path.join(GENERATED_DIR, name)
     pdf.output(path)
-    return path
 
-    
+    return path
 
 @app.route("/api/upload_process", methods=["POST"])
 def api_upload_process():
