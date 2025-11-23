@@ -377,7 +377,6 @@
           </div>
         </div>
         <div class="sideActions">
-          <button class="btn" id="newChatBtn" style="flex:1; padding:8px 10px; font-size:12px;">New Chat</button>
           <button class="btn" id="clearChatBtn" style="flex:1; padding:8px 10px; font-size:12px;">Clear</button>
         </div>
         <div class="themeToggle" style="margin-top:4px;">
@@ -914,31 +913,7 @@
       qaCloseBtn.onclick = () => { closeQAModal(); };
     }
 
-    const newChatBtn = document.getElementById('newChatBtn');
     const clearChatBtn = document.getElementById('clearChatBtn');
-
-    if (newChatBtn) {
-      newChatBtn.onclick = async () => {
-        if (!user || !user.logged_in) {
-          appendItem('Draco Pro is required to create saved chats.', 'bot');
-          return;
-        }
-        try {
-          const r = await fetch('/api/chats/new', { method: 'POST' });
-          const d = await r.json();
-          if (!r.ok || !d.ok) {
-            appendItem('Could not start new chat.', 'bot');
-            return;
-          }
-          log.innerHTML = '';
-          historyItems = [];
-          await loadHistory();
-        } catch (e) {
-          appendItem('Error creating new chat.', 'bot');
-        }
-      };
-    }
-
     if (clearChatBtn) {
       clearChatBtn.onclick = async () => {
         if (!user || !user.logged_in) {

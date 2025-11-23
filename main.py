@@ -150,9 +150,7 @@ def user_paths(email: str):
     }
 
 def get_logged_in_email() -> Optional[str]:
-    e = session.get("user_email")
-    if isinstance(e, str) and "@" in e:
-        return e
+    """Email login has been removed; always operate in guest mode."""
     return None
 
 def _load_chats(email: str):
@@ -684,14 +682,14 @@ def get_weather(city):
     except Exception as e:
         return f"Error fetching weather: {str(e)}"
 
-NEWS_API_KEY = "231a93af4a8b4dc6bafbb736c20b20c3"
+NEWSAPI_KEY = "231a93af4a8b4dc6bafbb736c20b20c3"
 
 def get_news(topic="general"):
-    if not NEWS_API_KEY:
+    if not NEWSAPI_KEY:
         return "News feature needs an API key. Add it to NEWS_API_KEY."
     
     try:
-        url = f"https://newsapi.org/v2/top-headlines?q={topic}&apiKey={NEWS_API_KEY}&pageSize=5"
+        url = f"https://newsapi.org/v2/top-headlines?q={topic}&apiKey={NEWSAPI_KEY}&pageSize=5"
         response = requests.get(url)
         data = response.json()
         
@@ -829,7 +827,7 @@ def draco_ai(prompt):
 
     except Exception as e:
         return f"Bro API error: {e}"
-
+    
 # ------------- Command processing (centralised) -------------
 def process_command(raw_cmd: str) -> str:
     """
@@ -842,25 +840,13 @@ def process_command(raw_cmd: str) -> str:
     cmd = raw_cmd.strip().lower()
     # Save to global session memory
     memory.add(f"You: {raw_cmd}")
-    # If logged in, append to per-user chat history
-    user_email = get_logged_in_email()
-    if user_email:
-        try:
-            save_chat_line(user_email, "user", raw_cmd)
-        except Exception:
-            pass
+
     personality.update(cmd)
 
     # greetings / small talk
     if any(x in cmd for x in ["hello", "hi", "hey"]):
-        reply = personality.respond(f"Hello {memory.get_pref('name', 'friend')}! How can I help?")
+        reply = personality.respond("Hello! How can I help?")
         speak(reply)
-        # personalize greeting if user profile has name
-        user_email = get_logged_in_email()
-        if user_email:
-            prof = get_user_profile(user_email)
-            name = prof.get("name") or memory.get_pref('name', 'friend')
-            reply = reply.replace("friend", name)
         return reply
 
     if "how are you" in cmd:
@@ -878,6 +864,35 @@ def process_command(raw_cmd: str) -> str:
         speak(reply)
         return reply
     
+        # ---- Intent Detection for File Generation Before DeepSeek ----
+    if any(x in cmd for x in ["ppt", "slides", "presentation"]):
+        topic = raw_cmd.replace("ppt", "").replace("slides", "").replace("presentation", "").strip()
+        if topic:
+            points, sources = research_query_to_texts_with_sources(topic, limit=8)
+            path = _generate_pptx(f"{topic.title()} - Slides", points)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            return {"text": f"PPT Generated for {topic}.", "action": "open_url", "url": url}
+
+    if any(x in cmd for x in ["pdf", "report"]):
+        topic = raw_cmd.replace("pdf", "").replace("report", "").strip()
+        if topic:
+            points, sources = research_query_to_texts_with_sources(topic, limit=12)
+            path = _generate_pdf(f"{topic.title()} - Report", points, sources=sources)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            return {"text": f"PDF Generated for {topic}.", "action": "open_url", "url": url}
+
+    if any(x in cmd for x in ["doc", "notes"]):
+        topic = raw_cmd.replace("doc", "").replace("notes", "").strip()
+        if topic:
+            points, sources = research_query_to_texts_with_sources(topic, limit=10)
+            path = _generate_docx(f"{topic.title()} - Notes", points)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            return {"text": f"DOC Generated for {topic}.", "action": "open_url", "url": url}
+
+
     if "Who created you?" in cmd:
         reply = "My sensai Aryan Sonsurkar created me to make his as well as your life easier."
         speak(reply)
@@ -1317,6 +1332,35 @@ def process_command(raw_cmd: str) -> str:
             return "News lookup available — add NEWSAPI_KEY."
         else:
             return "News feature needs an API key. Add it to NEWSAPI_KEY."
+    
+        # ---- Intent Detection for File Generation Before DeepSeek ----
+    if any(x in cmd for x in ["ppt", "slides", "presentation"]):
+        topic = raw_cmd.replace("ppt", "").replace("slides", "").replace("presentation", "").strip()
+        if topic:
+            points, sources = research_query_to_texts_with_sources(topic, limit=8)
+            path = _generate_pptx(f"{topic.title()} - Slides", points)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            return {"text": f"PPT Generated for {topic}.", "action": "open_url", "url": url}
+
+    if any(x in cmd for x in ["pdf", "report"]):
+        topic = raw_cmd.replace("pdf", "").replace("report", "").strip()
+        if topic:
+            points, sources = research_query_to_texts_with_sources(topic, limit=12)
+            path = _generate_pdf(f"{topic.title()} - Report", points, sources=sources)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            return {"text": f"PDF Generated for {topic}.", "action": "open_url", "url": url}
+
+    if any(x in cmd for x in ["doc", "notes"]):
+        topic = raw_cmd.replace("doc", "").replace("notes", "").strip()
+        if topic:
+            points, sources = research_query_to_texts_with_sources(topic, limit=10)
+            path = _generate_docx(f"{topic.title()} - Notes", points)
+            rel = os.path.relpath(path, os.getcwd()).replace("\\", "/")
+            url = f"/download/{rel}"
+            return {"text": f"DOC Generated for {topic}.", "action": "open_url", "url": url}
+
 
     # research and doc generation
     if cmd.startswith("research ") or cmd.startswith("search topic "):
@@ -1387,31 +1431,10 @@ def guest_mode():
     # Guest mode (login removed) – just serve app
     return send_from_directory(".", "draco.html")
 
-@app.route("/login", methods=["POST"])
-def login():
-    data = request.json or {}
-    email = (data.get("email") or "").strip().lower()
-    if not email or "@" not in email:
-        return {"ok": False, "error": "invalid_email"}, 400
-    session["user_email"] = email
-    session.pop("chat_id", None)
-    return {"ok": True, "email": email}
-
-
-@app.route("/logout", methods=["POST"])
-def logout():
-    session.pop("user_email", None)
-    session.pop("chat_id", None)
-    return {"ok": True}
-
-
 @app.route("/me")
 def me():
-    email = get_logged_in_email()
-    if not email:
-        return {"logged_in": False}
-    prof = get_user_profile(email)
-    return {"logged_in": True, "email": email, "profile": prof}
+    # Email authentication removed; always respond with guest mode details
+    return {"logged_in": False, "profile": memory.long}
 
 @app.route("/api/profile", methods=["GET", "POST"])
 def api_profile():
