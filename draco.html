@@ -202,6 +202,7 @@
 
     /* Mobile: chat full width, sidebar as slide-in overlay */
     .mobile-menu-btn { display:none; }
+    body.mobile-side-open { overflow:hidden; }
 
     @media (max-width: 768px) {
       .layout { grid-template-columns: minmax(0,1fr); }
@@ -214,19 +215,27 @@
         max-width:320px;
         z-index:80;
         transform: translateX(-100%);
-        transition: transform .25s ease;
+        transition: transform .28s ease;
+        will-change: transform;
       }
       body.mobile-side-open .side { transform: translateX(0); }
 
       .side-overlay {
-        display:none;
         position:fixed;
         inset:0;
         background:rgba(0,0,0,.45);
         backdrop-filter: blur(2px);
         z-index:75;
+        opacity:0;
+        visibility:hidden;
+        pointer-events:none;
+        transition: opacity .28s ease;
       }
-      body.mobile-side-open .side-overlay { display:block; }
+      body.mobile-side-open .side-overlay {
+        opacity:1;
+        visibility:visible;
+        pointer-events:auto;
+      }
 
       .mobile-menu-btn {
         display:inline-flex;
@@ -495,6 +504,7 @@
     const mobileMenuBtn = document.getElementById('mobileMenuBtn');
     const sideOverlay = document.getElementById('sideOverlay');
     const sideCloseBtn = document.getElementById('sideCloseBtn');
+    const sidebar = document.getElementById('sidebar');
     const buyProBtn = document.getElementById('buyProBtn');
     const whatsappBtn = document.getElementById('whatsappBtn');
     const instagramBtn = document.getElementById('instagramBtn');
@@ -528,6 +538,32 @@
     if (instagramBtn) {
       instagramBtn.onclick = () => { window.open(INSTAGRAM_URL, '_blank', 'noopener,noreferrer'); };
     }
+
+    function openMobileSidebar(){
+      document.body.classList.add('mobile-side-open');
+      if (sidebar) sidebar.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeMobileSidebar(){
+      document.body.classList.remove('mobile-side-open');
+      if (sidebar) sidebar.setAttribute('aria-hidden', 'true');
+    }
+
+    if (mobileMenuBtn) {
+      mobileMenuBtn.addEventListener('click', openMobileSidebar);
+    }
+    if (sideOverlay) {
+      sideOverlay.addEventListener('click', closeMobileSidebar);
+    }
+    if (sideCloseBtn) {
+      sideCloseBtn.addEventListener('click', closeMobileSidebar);
+    }
+
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 768) {
+        closeMobileSidebar();
+      }
+    });
 
     let socket = null;
     let user = { logged_in: false, profile: {} };
