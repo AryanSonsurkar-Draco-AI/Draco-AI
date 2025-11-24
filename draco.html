@@ -213,10 +213,13 @@
         left:0;
         width:78%;
         max-width:320px;
+        height:100vh;
+        max-height:none;
         z-index:80;
         transform: translateX(-100%);
         transition: transform .28s ease;
         will-change: transform;
+        overflow-y:auto;
       }
       body.mobile-side-open .side { transform: translateX(0); }
 
