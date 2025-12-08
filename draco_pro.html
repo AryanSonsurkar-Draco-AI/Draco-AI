@@ -319,142 +319,177 @@
           <div style="color:var(--muted); font-size:14px; margin-bottom:12px;">Here are some of the things you can simply say. Draco Pro listens, understands, and runs them locally on your Windows PC.</div>
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:14px;">
             <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
-              <div style="font-weight:600; margin-bottom:6px;">👋 Greetings &amp; Help</div>
+              <div style="font-weight:600; margin-bottom:6px;">🧠 Global Behavior &amp; Personality</div>
               <ul>
-                <li>"Hello" / "Hi" / "How are you?"</li>
-                <li>"Who are you?"</li>
-                <li>"Draco, what can you do?"</li>
-                <li>"Help Draco"</li>
+                <li>Wake word <em>Draco</em> keeps the mic listening via the low-latency engine.</li>
+                <li>&quot;Hello&quot;, &quot;Hey Draco&quot;, &quot;Good morning&quot; and other greetings route to <code>handle_greetings</code>.</li>
+                <li>&quot;Remember I love chai&quot; stores facts in long-term memory; &quot;What do you remember about me?&quot; recalls them.</li>
+                <li>Emotion detection and &quot;Set tone chill/serious&quot; adjust replies through <code>set_emotional_state</code>.</li>
+                <li>Smart fallback hands off unmatched commands to draco_ai with emotional TTS replies.</li>
               </ul>
             </div>
 
             <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
-              <div style="font-weight:600; margin-bottom:6px;">🕒 Time, Date &amp; Weather</div>
+              <div style="font-weight:600; margin-bottom:6px;">� Math, Teaching &amp; Study Timer</div>
               <ul>
-                <li>"What time is it?"</li>
-                <li>"What's the date?"</li>
-                <li>"Weather in Mumbai"</li>
-                <li>"Weather forecast in Delhi for 3 days"</li>
+                <li>&quot;Calculate 42 * 7&quot; or Hindi/Marathi variants trigger the math solver.</li>
+                <li>&quot;Convert 100 USD to INR&quot; or &quot;10 km to miles&quot; for instant unit conversions.</li>
+                <li>&quot;Teach me Python in 10 minutes&quot; launches structured teach mode lessons.</li>
+                <li>&quot;Start study timer 25 minutes&quot; or &quot;Study session&quot; runs Pomodoro cycles.</li>
+                <li>&quot;Cheat sheet for calculus&quot; and &quot;Revision summary&quot; surface quick study notes.</li>
               </ul>
             </div>
 
             <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
-              <div style="font-weight:600; margin-bottom:6px;">🌤️ News &amp; Web Search</div>
+              <div style="font-weight:600; margin-bottom:6px;">📚 Learning &amp; Study Suite</div>
               <ul>
-                <li>"News on technology" / "News about AI"</li>
-                <li>"Search for Python decorators"</li>
-                <li>"What is quantum computing?"</li>
-                <li>"Chat about machine learning"</li>
+                <li>&quot;Start study session for math&quot;, &quot;Study status&quot;, and &quot;Stop study session&quot; manage focus blocks.</li>
+                <li>&quot;Generate flashcards on OOP&quot; or &quot;Start quiz on history&quot; build active recall drills.</li>
+                <li>&quot;Learning roadmap data science&quot; plans guided journeys with milestones.</li>
+                <li>&quot;Revision cycle for physics&quot; and &quot;Store revision databases&quot; keep topics fresh.</li>
+                <li>Note system: &quot;Take note &lt;text&gt;&quot;, &quot;List notes&quot;, &quot;Search note project&quot; for quick capture.</li>
               </ul>
             </div>
 
             <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
-              <div style="font-weight:600; margin-bottom:6px;">🌐 Websites &amp; Apps</div>
+              <div style="font-weight:600; margin-bottom:6px;">🗂️ Todos &amp; Task Planning</div>
               <ul>
-                <li>"Open YouTube / Instagram / LinkedIn / GitHub / WhatsApp Web"</li>
-                <li>"What tabs are open?" / "What apps are running?"</li>
-                <li>"Close this tab" / "Close all tabs"</li>
-                <li>"Open app Notepad / Spotify / VS Code"</li>
+                <li>&quot;Break this task build portfolio&quot; or &quot;Generate steps for exam prep&quot; creates structured plans.</li>
+                <li>&quot;Add todo finish report&quot;, &quot;List todos&quot;, &quot;Pending tasks&quot; manage daily work.</li>
+                <li>&quot;Complete todo 3&quot; and &quot;Finish task 2&quot; mark progress with instant feedback.</li>
+                <li>&quot;Search todo presentation&quot; finds tasks with fuzzy matching.</li>
+              </ul>
+            </div>
+
+            <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
+              <div style="font-weight:600; margin-bottom:6px;">💡 Habits, Journals &amp; Life OS</div>
+              <ul>
+                <li>&quot;Add habit drink water&quot;, &quot;Show habits&quot;, &quot;Habit chart&quot; visualize streaks with ✔/❌.</li>
+                <li>&quot;Weekly habit summary&quot; and &quot;Habit graph&quot; give progress snapshots.</li>
+                <li>&quot;Add journal today was productive&quot; and &quot;Show today&apos;s journal&quot; capture reflections.</li>
+                <li>&quot;Log mood I feel stressed&quot;, &quot;Today mood&quot;, &quot;How was my mood?&quot; track emotions.</li>
+                <li>&quot;Daily reflection&quot;, &quot;Weekly summary&quot;, and routine builders power the Life OS.</li>
+              </ul>
+            </div>
+
+            <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
+              <div style="font-weight:600; margin-bottom:6px;">🌦️ Weather &amp; News</div>
+              <ul>
+                <li>&quot;Weather in Mumbai&quot;, &quot;Forecast Pune for 5 days&quot; support Hindi &amp; Marathi variants.</li>
+                <li>&quot;News on technology&quot; or &quot;News about AI&quot; grabs quick headlines.</li>
+                <li>Weather module covers current conditions, and forecast is powered via <code>get_weather_forecast</code>.</li>
+                <li>Combine with routines: &quot;What&apos;s the weather before I leave?&quot; for automation flows.</li>
+              </ul>
+            </div>
+
+            <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
+              <div style="font-weight:600; margin-bottom:6px;">🔍 Web Search &amp; Research Docs</div>
+              <ul>
+                <li>&quot;Search for Python decorators&quot;, &quot;Meaning of recursion&quot;, supports multilingual queries.</li>
+                <li>&quot;Research about AI agents&quot; creates a Word document summary in <code>generated/</code>.</li>
+                <li>&quot;Create document on climate change&quot; bundles vetted search results with citations.</li>
+                <li>&quot;Look up quantum computing&quot; or &quot;Define polymorphism&quot; provides quick answers.</li>
+              </ul>
+            </div>
+
+            <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
+              <div style="font-weight:600; margin-bottom:6px;">� Text Utilities, Email &amp; Files</div>
+              <ul>
+                <li>&quot;Summarize this paragraph&quot;, &quot;Short notes on thermodynamics&quot; invoke the AI note engine.</li>
+                <li>&quot;Translate to Spanish hello&quot; or &quot;Spell check accomodate&quot; polish your writing.</li>
+                <li>&quot;Send email to user@example.com subject hi body test&quot; fires off formatted mail.</li>
+                <li>&quot;Generate text file notes.txt content Project ideas&quot; saves files instantly.</li>
+                <li>&quot;Search image cats&quot; or &quot;Search meme coding&quot; fetches visual references.</li>
+              </ul>
+            </div>
+
+            <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
+              <div style="font-weight:600; margin-bottom:6px;">🎶 Music &amp; Audio Modes</div>
+              <ul>
+                <li>&quot;Play Faded&quot;, &quot;Play music&quot;, or Hindi/Marathi &quot;Gaana bajao&quot; cue tracks locally.</li>
+                <li>Genre shortcuts: &quot;Play lofi music&quot;, &quot;Play party songs&quot;, &quot;Play sad songs&quot;.</li>
+                <li>&quot;Pause music&quot;, &quot;Next song&quot;, &quot;Stop music&quot; manage playback.</li>
+                <li>Drops to YouTube search when the track is not in the local library.</li>
+              </ul>
+            </div>
+
+            <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
+              <div style="font-weight:600; margin-bottom:6px;">🖥️ Apps &amp; Websites</div>
+              <ul>
+                <li>&quot;Open VS Code&quot;, &quot;Launch Chrome&quot;, &quot;Start Notepad&quot; via cross-platform handlers.</li>
+                <li>&quot;Open YouTube&quot;, &quot;Go to GitHub&quot;, &quot;Open karo Instagram&quot; for quick browsing.</li>
+                <li>&quot;What apps are running?&quot; or &quot;List tabs&quot; shows desktop state instantly.</li>
+                <li>Supports safe website openers and system status checks for tabs &amp; windows.</li>
               </ul>
             </div>
 
             <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
               <div style="font-weight:600; margin-bottom:6px;">💬 WhatsApp &amp; Contacts</div>
               <ul>
-                <li>"Send a WhatsApp message to Riya saying I'll be late."</li>
-                <li>"Send a WhatsApp message to +919876543210 saying hello."</li>
-                <li>Uses saved names via <code>contacts.json</code> or raw phone numbers.</li>
-                <li>"Add contact Riya number 9876543210" / "List all contacts"</li>
+                <li>&quot;Send WhatsApp to Rohan saying hi&quot; or &quot;Send WhatsApp to 9876543210 message hello&quot;.</li>
+                <li>Deep focus mode auto-replies, otherwise Draco prompts: &quot;What should I reply?&quot;</li>
+                <li>&quot;Add contact Riya 9876543210&quot;, &quot;List contacts&quot;, &quot;Remove contact Alex&quot; maintain the book.</li>
+                <li>Leverages clipboard and saved contacts for fast replies.</li>
               </ul>
             </div>
 
             <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
-              <div style="font-weight:600; margin-bottom:6px;">🎵 Music &amp; Media</div>
+              <div style="font-weight:600; margin-bottom:6px;">⏰ Reminders, Timers &amp; Focus</div>
               <ul>
-                <li>"Play music" / "Play song Believer"</li>
-                <li>"Pause music" / "Next song" / "Previous song"</li>
-                <li>"Stop music"</li>
-                <li>"Take screenshot" / "Take annotated screenshot"</li>
+                <li>&quot;Remind me to call mom at 7:30&quot; or &quot;Remind me in 10 minutes&quot; schedule alerts.</li>
+                <li>&quot;Set timer for 25 minutes&quot;, &quot;Start study timer&quot;, &quot;Stop timer&quot; keep sessions on track.</li>
+                <li>&quot;Start focus 45 minutes&quot;, &quot;Start deep focus 60&quot;, &quot;Focus status&quot; engage productivity modes.</li>
+                <li>&quot;Daily focus&quot; and &quot;Daily story&quot; generate AI summaries of goals and progress.</li>
               </ul>
             </div>
 
             <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
-              <div style="font-weight:600; margin-bottom:6px;">🗒️ Notes, Todos &amp; Reminders</div>
+              <div style="font-weight:600; margin-bottom:6px;">🛠️ System Utilities &amp; Workflows</div>
               <ul>
-                <li>"Take note buy milk" / "List notes" / "Search note project timeline"</li>
-                <li>"Edit note buy milk add bread too"</li>
-                <li>"Add todo finish the report" / "List todos" / "Search todo report"</li>
-                <li>"Remind me to stretch at 16:30" / "Set timer for 10 minutes"</li>
+                <li>&quot;System status&quot;, &quot;Check system&quot;, &quot;System summary&quot; display hardware health.</li>
+                <li>&quot;Temp clean&quot;, &quot;Empty recycle bin&quot;, &quot;Boost RAM&quot;, &quot;Boost network&quot; tidy the PC.</li>
+                <li>&quot;Screenshot&quot;, &quot;Screenshot annotated&quot;, &quot;Organize files&quot;, &quot;Clean downloads&quot; handle housekeeping.</li>
+                <li>&quot;Zip project folder&quot;, &quot;Convert to PDF&quot;, &quot;Merge pdf file1 file2&quot; tackle file ops.</li>
+                <li>Workflow engine: &quot;Start recording workflow morning setup&quot;, &quot;Run workflow morning setup&quot;, plus routines.</li>
               </ul>
             </div>
 
             <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
-              <div style="font-weight:600; margin-bottom:6px;">🔢 Math &amp; Conversions</div>
+              <div style="font-weight:600; margin-bottom:6px;">�‍💻 Coding &amp; Developer Assistant</div>
               <ul>
-                <li>"Convert 100 USD to INR"</li>
-                <li>"10 km to miles" / "25 c to f"</li>
-                <li>"Calculate 5 plus 3"</li>
-                <li>"Solve x squared equals 4"</li>
+                <li>&quot;Start code watcher Draco project&quot;, &quot;Stop watcher&quot;, and &quot;Activity summary&quot; track sessions.</li>
+                <li>&quot;Analyze file C:\\path\\file.py&quot;, &quot;Improve code &lt;path&gt;&quot;, &quot;Explain code snippet&quot; for reviews.</li>
+                <li>&quot;Fix code error&quot;, &quot;Install requests&quot;, &quot;Run code main.py&quot; automate debugging.</li>
+                <li>&quot;Find unused imports&quot;, &quot;Generate docs for project&quot;, &quot;Project banao ecommerce&quot; accelerate development.</li>
+                <li>Focus tools: &quot;Start SIH mode&quot;, coding time tracker, pattern history, and deep focus integration.</li>
               </ul>
             </div>
 
             <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
-              <div style="font-weight:600; margin-bottom:6px;">⚙️ System Controls</div>
+              <div style="font-weight:600; margin-bottom:6px;">� Fun &amp; Inspiration</div>
               <ul>
-                <li>"System status" / "System summary"</li>
-                <li>"Set brightness 60" / "Set volume 30"</li>
-                <li>"Turn WiFi on" / "Turn WiFi off" / "Check WiFi status"</li>
-                <li>"Dark mode" / "Light mode" / "Sleep PC" / "Shutdown" / "Restart"</li>
+                <li>&quot;Tell me a joke&quot;, &quot;Joke sunao&quot;, &quot;Make me laugh&quot; pull from themed pools.</li>
+                <li>&quot;Tell me a random fact&quot;, &quot;Motivate me&quot;, &quot;Give me a geek joke&quot; lift your mood.</li>
+                <li>&quot;Roll a dice&quot;, &quot;Flip a coin&quot; resolve quick decisions.</li>
               </ul>
             </div>
 
             <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
-              <div style="font-weight:600; margin-bottom:6px;">🧠 System Utilities &amp; Files</div>
+              <div style="font-weight:600; margin-bottom:6px;">🤝 ChatGPT Direct</div>
               <ul>
-                <li>"What's my battery percentage?"</li>
-                <li>"Show CPU and RAM usage" / "Clear temporary files" / "Empty recycle bin"</li>
-                <li>"What's in my clipboard?" / "Clear clipboard" / "Copy this"</li>
-                <li>"Find file budget" / "List files in C:\\Users\\Public"</li>
+                <li>&quot;Ask ChatGPT why is the sky blue&quot; delegates to the OpenAI-powered automation.</li>
+                <li>&quot;ChatGPT se pucho resume tips&quot; supports Hinglish and Hindi phrasing.</li>
+                <li>Smoothly blends into voice-first workflows alongside the smart fallback mode.</li>
               </ul>
             </div>
 
             <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
-              <div style="font-weight:600; margin-bottom:6px;">⌨️ Typing &amp; Text Tools</div>
+              <div style="font-weight:600; margin-bottom:6px;">🎙️ Voice Notes &amp; Voice Engine</div>
               <ul>
-                <li>"Type Hello team, meeting at 3 PM"</li>
-                <li>"Summarize this ..." / "Translate hello to Spanish"</li>
-                <li>"Spell check this is a sample"</li>
-                <li>"Compare files" / "Merge files" / "Search image cats"</li>
-              </ul>
-            </div>
-
-            <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
-              <div style="font-weight:600; margin-bottom:6px;">📚 Research &amp; Fun</div>
-              <ul>
-                <li>"Research quantum computing basics" / "Search topic AI agents"</li>
-                <li>"Tell me a joke" / "Tell me a random fact" / "Motivate me"</li>
-                <li>"Roll a dice" / "Flip a coin"</li>
-                <li>"Search meme programmer jokes"</li>
-              </ul>
-            </div>
-
-            <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
-              <div style="font-weight:600; margin-bottom:6px;">💻 Developer &amp; Shell</div>
-              <ul>
-                <li>"List top running processes" / "Kill Chrome process"</li>
-                <li>"Show active ports" / "Show system logs" / "Clear logs"</li>
-                <li>"Run ipconfig" / "Run tasklist" / "Run ping google.com"</li>
-                <li>"Repeat last command" / "What was my last command?"</li>
-              </ul>
-            </div>
-
-            <div style="border:1px solid var(--line); border-radius:12px; padding:12px 14px; background:rgba(0,0,0,0.08);">
-              <div style="font-weight:600; margin-bottom:6px;">🧠 Personality &amp; Smart Memory</div>
-              <ul>
-                <li>"How do you feel today?" / "What's your favorite anime?"</li>
-                <li>"Tell me something interesting" / "What's your opinion on AI?"</li>
-                <li>Learns frequently used commands and habits over time.</li>
-                <li>Background features like DracoEye, Daily Story Tracker, silence monitor, and WhatsApp auto-reply.</li>
+                <li>&quot;Start voice note&quot;, &quot;Stop voice note&quot;, &quot;Show voice notes&quot; capture audio memos.</li>
+                <li>Silence monitor and background listener keep hands-free capture reliable.</li>
+                <li>Emotional TTS mirrors the assistant&apos;s mood for every response.</li>
+                <li>Integrates with DracoEye, Daily Story Tracker, and WhatsApp auto-reply for a cohesive experience.</li>
               </ul>
             </div>
           </div>
